@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { MAP_STYLES } from '../mapStyles'
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 
@@ -15,6 +16,7 @@ const PK_LEVELS = [
 
 export default function MapView({
   config,
+  mapStyleId,
   era5Visible,
   era5Opacity,
   era5TileUrl,
@@ -27,14 +29,23 @@ export default function MapView({
   const pkVisible = { national: pkNationalVisible, provinces: pkProvincesVisible, districts: pkDistrictsVisible }
   const containerRef = useRef(null)
   const mapRef = useRef(null)
+  const isFirstStyleRef = useRef(true)
+
+  // Mirrored into a ref (rather than closed over) so that addOverlayLayers --
+  // called fresh from 'style.load' every time the basemap switches, long
+  // after the mount effect's closure was created -- always sees the current
+  // toggle state instead of whatever was true when the map was first built.
+  const stateRef = useRef({})
+  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity }
 
   // One-time map setup.
   useEffect(() => {
     if (!config) return
 
+    const initialStyle = MAP_STYLES.find((s) => s.id === mapStyleId) || MAP_STYLES[0]
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      style: initialStyle.url,
       projection: 'globe',
       center: config.mapCenter,
       zoom: config.mapZoom,
@@ -79,18 +90,16 @@ export default function MapView({
 
     spinGlobe()
 
-    map.on('style.load', () => {
-      map.setFog({
-        color: 'rgb(20, 27, 34)',
-        'high-color': 'rgb(36, 52, 68)',
-        'horizon-blend': 0.03,
-        'space-color': 'rgb(5, 8, 12)',
-        'star-intensity': 0.4,
-      })
-    })
+    // (Re)builds every custom source/layer on top of whatever basemap style
+    // just loaded. 'style.load' fires both on initial load and again each
+    // time setStyle() swaps the basemap -- and a style swap silently drops
+    // any sources/layers we've added, since they aren't part of the new
+    // style's own spec. Re-running this each time is what makes the glacier
+    // markers, boundaries, and ERA5 overlay survive a basemap switch.
+    function addOverlayLayers() {
+      if (map.getSource('hkh-boundary')) return // already (re)built for this style
+      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity } = stateRef.current
 
-    let rafId
-    map.on('load', () => {
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
       map.addSource('hkh-boundary', {
@@ -216,18 +225,74 @@ export default function MapView({
         },
       })
 
-      // Cheap global blink loop -- animates layer-wide paint props, not per-feature
+      // ERA5 raster + Pakistan admin boundaries both render below the
+      // cluster dots, which -- having just been added above -- are
+      // guaranteed to exist at this point.
+      if (era5TileUrl) {
+        map.addSource('era5-temp', {
+          type: 'raster',
+          tiles: [era5TileUrl],
+          tileSize: 256,
+          attribution: config.era5?.attribution,
+        })
+        map.addLayer({
+          id: 'era5-temp-layer',
+          type: 'raster',
+          source: 'era5-temp',
+          layout: { visibility: era5Visible ? 'visible' : 'none' },
+          paint: { 'raster-opacity': era5Opacity },
+        }, 'cluster-dots')
+      }
+
+      PK_LEVELS.forEach(({ key, url, color, lineWidth, fillOpacity }) => {
+        if (!pkVisible[key]) return // not toggled on -- don't fetch until asked
+        map.addSource(`pk-${key}`, { type: 'geojson', data: url })
+        map.addLayer({
+          id: `pk-${key}-fill`,
+          type: 'fill',
+          source: `pk-${key}`,
+          paint: { 'fill-color': color, 'fill-opacity': fillOpacity },
+        }, 'cluster-dots')
+        map.addLayer({
+          id: `pk-${key}-line`,
+          type: 'line',
+          source: `pk-${key}`,
+          paint: { 'line-color': color, 'line-width': lineWidth, 'line-opacity': 0.85 },
+        }, 'cluster-dots')
+      })
+    }
+
+    map.on('style.load', () => {
+      map.setFog({
+        color: 'rgb(20, 27, 34)',
+        'high-color': 'rgb(36, 52, 68)',
+        'horizon-blend': 0.03,
+        'space-color': 'rgb(5, 8, 12)',
+        'star-intensity': 0.4,
+      })
+      addOverlayLayers()
+    })
+
+    let rafId
+    map.on('load', () => {
+      // Cheap global blink loop -- animates layer-wide paint props, not
+      // per-feature. Layer ids are recreated with the same names on every
+      // basemap switch, so this loop (started once) keeps working across
+      // switches; the existence check just guards the instant a switch is
+      // still swapping styles.
       let t0 = performance.now()
       function blink(now) {
-        const dt = (now - t0) / 1000
-        const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(dt * 2.4)) // 0.35 - 1.0
-        const widthPulse = 1.4 + 1.8 * (0.5 + 0.5 * Math.sin(dt * 2.4)) // 1.4 - 3.2
-        map.setPaintProperty('glacier-outline-decreasing', 'circle-stroke-opacity', pulse)
-        map.setPaintProperty('glacier-outline-decreasing', 'circle-stroke-width', widthPulse)
-        map.setPaintProperty('glacier-outline-increasing', 'circle-stroke-opacity', pulse)
-        map.setPaintProperty('glacier-outline-increasing', 'circle-stroke-width', widthPulse)
-        map.setPaintProperty('cluster-outline', 'circle-stroke-opacity', pulse)
-        map.setPaintProperty('cluster-outline', 'circle-stroke-width', widthPulse)
+        if (map.getLayer('glacier-outline-decreasing')) {
+          const dt = (now - t0) / 1000
+          const pulse = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(dt * 2.4)) // 0.35 - 1.0
+          const widthPulse = 1.4 + 1.8 * (0.5 + 0.5 * Math.sin(dt * 2.4)) // 1.4 - 3.2
+          map.setPaintProperty('glacier-outline-decreasing', 'circle-stroke-opacity', pulse)
+          map.setPaintProperty('glacier-outline-decreasing', 'circle-stroke-width', widthPulse)
+          map.setPaintProperty('glacier-outline-increasing', 'circle-stroke-opacity', pulse)
+          map.setPaintProperty('glacier-outline-increasing', 'circle-stroke-width', widthPulse)
+          map.setPaintProperty('cluster-outline', 'circle-stroke-opacity', pulse)
+          map.setPaintProperty('cluster-outline', 'circle-stroke-width', widthPulse)
+        }
         rafId = requestAnimationFrame(blink)
       }
       rafId = requestAnimationFrame(blink)
@@ -261,6 +326,22 @@ export default function MapView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config])
+
+  // Swap the basemap when the user picks a different style. The very first
+  // run is a no-op -- that initial style is already set at map creation
+  // above -- everything after that calls setStyle(), which triggers
+  // 'style.load' and, via addOverlayLayers(), rebuilds the glacier/boundary/
+  // ERA5 layers on top of the new basemap.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (isFirstStyleRef.current) {
+      isFirstStyleRef.current = false
+      return
+    }
+    const style = MAP_STYLES.find((s) => s.id === mapStyleId)
+    if (style) map.setStyle(style.url)
+  }, [mapStyleId])
 
   // Add (or swap the tile URL of) the ERA5 raster layer whenever the
   // selected month resolves to a fresh tile. Placed below the glacier

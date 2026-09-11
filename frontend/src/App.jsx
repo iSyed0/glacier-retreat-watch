@@ -3,11 +3,14 @@ import './App.css'
 import MapView from './components/MapView'
 import Legend from './components/Legend'
 import DataSheet from './components/DataSheet'
+import BasemapSwitcher from './components/BasemapSwitcher'
+import { DEFAULT_MAP_STYLE_ID } from './mapStyles'
 
 export default function App() {
   const [config, setConfig] = useState(null)
   const [selectedFeature, setSelectedFeature] = useState(null)
   const [logoError, setLogoError] = useState(false)
+  const [mapStyleId, setMapStyleId] = useState(DEFAULT_MAP_STYLE_ID)
 
   const [era5Visible, setEra5Visible] = useState(false)
   const [era5Opacity, setEra5Opacity] = useState(0.65)
@@ -83,6 +86,7 @@ export default function App() {
       {config && (
         <MapView
           config={config}
+          mapStyleId={mapStyleId}
           era5Visible={era5Visible}
           era5Opacity={era5Opacity}
           era5TileUrl={era5Tile?.tileUrlTemplate || null}
@@ -95,6 +99,7 @@ export default function App() {
       )}
 
       <div id="panels">
+        <BasemapSwitcher styleId={mapStyleId} onChange={setMapStyleId} />
         <Legend
           era5={config?.era5}
           era5Visible={era5Visible}

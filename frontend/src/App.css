@@ -97,6 +97,35 @@
   opacity: 0.6;
 }
 
+/* Basemap style switcher -- top-left, just under the bar */
+#basemap-switcher {
+  position: fixed;
+  top: calc(var(--bar-height) + 16px);
+  left: 16px;
+  display: flex;
+  gap: 4px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  z-index: 6;
+}
+#basemap-switcher button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#basemap-switcher button:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+#basemap-switcher button.active { color: #05131f; background: var(--accent); }
+
 /* Legend -- freely draggable via its title bar, position:fixed so drag
    coordinates map 1:1 to viewport pixels regardless of ancestor layout */
 #legend {
