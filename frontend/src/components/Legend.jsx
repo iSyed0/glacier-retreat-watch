@@ -40,7 +40,21 @@ function Chevron({ open, mini }) {
   )
 }
 
+function CrosshairIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="6.5" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <line x1="12" y1="1.5" x2="12" y2="5" />
+      <line x1="12" y1="19" x2="12" y2="22.5" />
+      <line x1="1.5" y1="12" x2="5" y2="12" />
+      <line x1="19" y1="12" x2="22.5" y2="12" />
+    </svg>
+  )
+}
+
 export default function Legend({
+  onRecenter,
   era5,
   era5Visible,
   onToggleEra5,
@@ -139,16 +153,28 @@ export default function Legend({
         title="Drag to move"
       >
         <span className="legend-header-title">Glacier status</span>
-        <button
-          type="button"
-          className="legend-collapse-btn"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setCollapsedPersist(!collapsed)}
-          aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
-          title={collapsed ? 'Expand' : 'Collapse'}
-        >
-          <Chevron open={!collapsed} />
-        </button>
+        <span className="legend-header-actions">
+          <button
+            type="button"
+            className="legend-icon-btn"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onRecenter?.() }}
+            aria-label="Center on HKH region"
+            title="Center on HKH region"
+          >
+            <CrosshairIcon />
+          </button>
+          <button
+            type="button"
+            className="legend-icon-btn"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => setCollapsedPersist(!collapsed)}
+            aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+            title={collapsed ? 'Expand' : 'Collapse'}
+          >
+            <Chevron open={!collapsed} />
+          </button>
+        </span>
       </div>
 
       {!collapsed && (

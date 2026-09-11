@@ -79,6 +79,10 @@ def config():
         "era5": ERA5_LAYER,
         "mapCenter": [82.5, 32.0],
         "mapZoom": 2.5,
+        # Bounding box of the HKH study area boundary (backend/data/hkh_boundary.geojson)
+        # -- [[minLon, minLat], [maxLon, maxLat]] -- used by the "center on HKH
+        # region" button to fitBounds() rather than a hand-picked center/zoom.
+        "hkhBounds": [[60.85, 15.96], [105.05, 39.32]],
     }
 
 

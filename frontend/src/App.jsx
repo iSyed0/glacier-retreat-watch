@@ -11,6 +11,7 @@ export default function App() {
   const [selectedFeature, setSelectedFeature] = useState(null)
   const [logoError, setLogoError] = useState(false)
   const [mapStyleId, setMapStyleId] = useState(DEFAULT_MAP_STYLE_ID)
+  const [recenterSignal, setRecenterSignal] = useState(0)
 
   const [era5Visible, setEra5Visible] = useState(false)
   const [era5Opacity, setEra5Opacity] = useState(0.65)
@@ -95,12 +96,14 @@ export default function App() {
           pkProvincesVisible={pkProvincesVisible}
           pkDistrictsVisible={pkDistrictsVisible}
           onFeatureClick={setSelectedFeature}
+          recenterSignal={recenterSignal}
         />
       )}
 
       <div id="panels">
         <BasemapSwitcher styleId={mapStyleId} onChange={setMapStyleId} />
         <Legend
+          onRecenter={() => setRecenterSignal((n) => n + 1)}
           era5={config?.era5}
           era5Visible={era5Visible}
           onToggleEra5={setEra5Visible}

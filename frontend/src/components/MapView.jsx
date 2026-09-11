@@ -25,11 +25,16 @@ export default function MapView({
   pkProvincesVisible,
   pkDistrictsVisible,
   onFeatureClick,
+  recenterSignal,
 }) {
   const pkVisible = { national: pkNationalVisible, provinces: pkProvincesVisible, districts: pkDistrictsVisible }
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const isFirstStyleRef = useRef(true)
+  const isFirstRecenterRef = useRef(true)
+  // Ref (not a plain closure var) so the "center on HKH region" button --
+  // wired up in a separate effect below -- can silence the auto-spin too.
+  const spinEnabledRef = useRef(true)
 
   // Mirrored into a ref (rather than closed over) so that addOverlayLayers --
   // called fresh from 'style.load' every time the basemap switches, long
@@ -63,11 +68,10 @@ export default function MapView({
     const secondsPerRevolution = 120
     const maxSpinZoom = 5
     const slowSpinZoom = 3
-    let spinEnabled = true
 
     function spinGlobe() {
       const zoom = map.getZoom()
-      if (spinEnabled && zoom < maxSpinZoom) {
+      if (spinEnabledRef.current && zoom < maxSpinZoom) {
         let distancePerSecond = 360 / secondsPerRevolution
         if (zoom > slowSpinZoom) {
           // Ease the spin down to a stop between slowSpinZoom and maxSpinZoom.
@@ -80,7 +84,7 @@ export default function MapView({
       }
     }
 
-    function stopSpin() { spinEnabled = false }
+    function stopSpin() { spinEnabledRef.current = false }
 
     map.on('mousedown', stopSpin)
     map.on('dragstart', stopSpin)
@@ -342,6 +346,26 @@ export default function MapView({
     const style = MAP_STYLES.find((s) => s.id === mapStyleId)
     if (style) map.setStyle(style.url)
   }, [mapStyleId])
+
+  // "Center on HKH region" button (in the status panel) bumps this counter.
+  // The first run is a no-op -- the map already opens on the HKH region --
+  // every increment after that flies/fits back to it and cancels the
+  // auto-spin, so a deliberate recenter doesn't get immediately undone.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (isFirstRecenterRef.current) {
+      isFirstRecenterRef.current = false
+      return
+    }
+    spinEnabledRef.current = false
+    if (config?.hkhBounds) {
+      map.fitBounds(config.hkhBounds, { padding: 60, duration: 1500 })
+    } else {
+      map.flyTo({ center: config.mapCenter, zoom: config.mapZoom, duration: 1500 })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recenterSignal])
 
   // Add (or swap the tile URL of) the ERA5 raster layer whenever the
   // selected month resolves to a fresh tile. Placed below the glacier

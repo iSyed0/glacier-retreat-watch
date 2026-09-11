@@ -164,7 +164,13 @@
   letter-spacing: 0.6px;
   white-space: nowrap;
 }
-#legend .legend-collapse-btn {
+#legend .legend-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+#legend .legend-icon-btn {
   background: transparent;
   border: none;
   color: var(--muted);
@@ -177,7 +183,7 @@
   border-radius: 6px;
   flex-shrink: 0;
 }
-#legend .legend-collapse-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+#legend .legend-icon-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 
 #legend .chevron { transition: transform 0.15s ease; transform: rotate(-90deg); }
 #legend .chevron.open { transform: rotate(0deg); }
