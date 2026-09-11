@@ -1,0 +1,25 @@
+:root {
+  --bar-height: 64px;
+  --bg: #0b0f14;
+  --bar-bg: #0f151c;
+  --panel-bg: rgba(15, 21, 28, 0.92);
+  --border: #1e2833;
+  --text: #eaf1f7;
+  --muted: #8ea3b6;
+  --accent: #4fb3ff;
+  --red: #ff3b30;
+  --blue: #5ec8ff;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+}

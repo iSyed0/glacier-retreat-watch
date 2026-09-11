@@ -1,0 +1,26 @@
+# Python (backend)
+backend/.venv/
+**/__pycache__/
+*.pyc
+
+# Node (frontend)
+frontend/node_modules/
+frontend/dist/
+
+# Local secrets -- contains the Mapbox token; keep frontend/.env.example
+# checked in instead so a fresh clone knows what to set.
+frontend/.env
+
+# Logs
+*.log
+
+# Raw, unsimplified districts boundary (~300MB) -- the app only ever reads
+# Pakistan_Districts.simplified.geojson (see backend/app.py); the raw file
+# is source material, not something the running app needs, and exceeds
+# GitHub's 100MB per-file limit.
+boundaries/Pakistan_Districts.geojson
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
