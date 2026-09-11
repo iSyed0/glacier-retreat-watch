@@ -79,7 +79,7 @@ export default function App() {
             <div className="logo-fallback">NDMA</div>
           )}
         </div>
-        <div id="title">HKH Glacier Retreat Current</div>
+        <div id="title">HKH Glacial Retreat Current</div>
         <div id="spacer" />
       </div>
 
