@@ -16,17 +16,27 @@ const PK_LEVELS = [
 
 // Building footprints -- one vector tileset per Pakistani district on an
 // internal TileServer GL instance (see backend/buildings.py). Footprints
-// are meaningless zoomed out, so the layer itself only renders past z13;
-// combined with each source's own `bounds`, that keeps 160+ district
-// sources from requesting a single tile until the user is actually in view
-// and zoomed in close. Rendered as 3D extrusions using each building's
-// `height` field (falls back to a flat 6m where that's missing/zero) --
-// tilt the camera (right-click-drag, or two-finger drag on touch) to see
-// them stand up; globe projection auto-switches to mercator well before
-// z13, so fill-extrusion (mercator-only) is always in play by then.
-const BUILDINGS_COLOR = '#2dd4bf'
-export const BUILDINGS_MIN_ZOOM = 13
+// are meaningless zoomed out, so the layer itself only renders past
+// BUILDINGS_MIN_ZOOM; combined with each source's own `bounds`, that keeps
+// 160+ district sources from requesting a single tile until the user is
+// actually in view and zoomed in close. Rendered as 3D extrusions using
+// each building's `height` field (falls back to a flat 6m where that's
+// missing/zero) -- tilt the camera (right-click-drag, or two-finger drag on
+// touch) to see them stand up; globe projection auto-switches to mercator
+// well before this zoom, so fill-extrusion (mercator-only) is always in
+// play by then.
+export const BUILDINGS_MIN_ZOOM = 10
 const BUILDINGS_DEFAULT_HEIGHT = 6
+
+// Height tiers, sampled from the real data (max height across districts
+// tops out around 55-85m -- Islamabad/Lahore/Karachi's tallest towers).
+// Three distinct hues rather than one color ramped by brightness, so the
+// classes read apart at a glance instead of blending together.
+export const BUILDINGS_HEIGHT_TIERS = [
+  { label: 'Small infrastructure', range: '< 12m', color: '#2dd4bf' },
+  { label: 'Tall infrastructure', range: '12–35m', color: '#fbbf24' },
+  { label: 'Skyscrapers', range: '35m+', color: '#d946ef' },
+]
 
 function addBuildingLayer(map, tileServer, id, bounds, beforeId) {
   const layerId = `bld-${id}`
@@ -38,6 +48,10 @@ function addBuildingLayer(map, tileServer, id, bounds, beforeId) {
     minzoom: 2,
     maxzoom: 17,
   })
+  // The effective (post-fallback) height in meters, shared by both the
+  // extrusion height and its color class so what a building looks like
+  // and what tier it's counted in never disagree.
+  const effectiveHeight = ['max', ['coalesce', ['get', 'height'], BUILDINGS_DEFAULT_HEIGHT], 3]
   map.addLayer({
     id: layerId,
     type: 'fill-extrusion',
@@ -45,20 +59,60 @@ function addBuildingLayer(map, tileServer, id, bounds, beforeId) {
     'source-layer': 'buildings',
     minzoom: BUILDINGS_MIN_ZOOM,
     paint: {
-      'fill-extrusion-color': BUILDINGS_COLOR,
+      'fill-extrusion-color': [
+        'step', effectiveHeight,
+        BUILDINGS_HEIGHT_TIERS[0].color,
+        12, BUILDINGS_HEIGHT_TIERS[1].color,
+        35, BUILDINGS_HEIGHT_TIERS[2].color,
+      ],
       // Buildings "grow" out of the ground over the first fraction of a
       // zoom level past BUILDINGS_MIN_ZOOM, same trick Mapbox's own 3D
       // buildings example uses, rather than popping in at full height.
       'fill-extrusion-height': [
         'interpolate', ['linear'], ['zoom'],
         BUILDINGS_MIN_ZOOM, 0,
-        BUILDINGS_MIN_ZOOM + 0.1, ['max', ['coalesce', ['get', 'height'], BUILDINGS_DEFAULT_HEIGHT], 3],
+        BUILDINGS_MIN_ZOOM + 0.1, effectiveHeight,
       ],
       'fill-extrusion-base': 0,
-      'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], BUILDINGS_MIN_ZOOM, 0, 15, 0.8, 17, 0.92],
+      // Stops relative to BUILDINGS_MIN_ZOOM (not hardcoded absolute zooms)
+      // so they can't collide with it -- Mapbox GL rejects an "interpolate"
+      // expression outright (the whole layer fails to add) if two stops
+      // land on the same zoom value.
+      'fill-extrusion-opacity': [
+        'interpolate', ['linear'], ['zoom'],
+        BUILDINGS_MIN_ZOOM, 0,
+        BUILDINGS_MIN_ZOOM + 0.5, 0.85,
+        BUILDINGS_MIN_ZOOM + 4, 0.92,
+      ],
       'fill-extrusion-vertical-gradient': true,
     },
   }, beforeId)
+}
+
+// A native Mapbox GL control (rather than a React-positioned element) so it
+// stacks automatically in the corner alongside NavigationControl -- no
+// manual pixel math, and no risk of ever colliding with the Legend/
+// BasemapSwitcher/DataSheet panels, which live in the other three corners.
+class ZoomIndicatorControl {
+  onAdd(map) {
+    this._map = map
+    this._container = document.createElement('div')
+    this._container.className = 'mapboxgl-ctrl zoom-indicator-ctrl'
+    this._update()
+    this._onZoom = () => this._update()
+    map.on('zoom', this._onZoom)
+    return this._container
+  }
+
+  onRemove() {
+    this._map.off('zoom', this._onZoom)
+    this._container.parentNode?.removeChild(this._container)
+    this._map = undefined
+  }
+
+  _update() {
+    this._container.textContent = `Zoom ${this._map.getZoom().toFixed(1)}`
+  }
 }
 
 export default function MapView({
@@ -114,6 +168,7 @@ export default function MapView({
     // visual hint that dragging (right-click, or ctrl+drag) tilts the view,
     // which is how you actually see the building extrusions stand up.
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right')
+    map.addControl(new ZoomIndicatorControl(), 'bottom-right')
     map.scrollZoom.enable()
 
     // Reported up to the status panel so the Buildings row can show a live

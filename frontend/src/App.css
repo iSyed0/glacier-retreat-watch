@@ -97,6 +97,24 @@
   opacity: 0.6;
 }
 
+/* Zoom-level readout -- a native Mapbox control (see MapView's
+   ZoomIndicatorControl) so it stacks cleanly above the zoom/compass
+   buttons in the bottom-right corner without any manual positioning. */
+.zoom-indicator-ctrl {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* Basemap style switcher -- top-left, just under the bar */
 #basemap-switcher {
   position: fixed;
@@ -278,7 +296,8 @@
   height: 8px;
   border-radius: 3px;
 }
-.layer-row .swatch.buildings {
+.layer-row .swatch.buildings,
+.legend-row .swatch.buildings {
   width: 12px;
   height: 12px;
   border-radius: 2px;
@@ -286,6 +305,15 @@
   border: 1.5px solid #2dd4bf;
 }
 .layer-row.disabled { opacity: 0.45; }
+
+.building-tiers { margin-top: 2px; }
+.building-tiers .legend-row {
+  padding-left: 20px;
+  font-size: 12.5px;
+  margin-bottom: 4px;
+}
+.building-tiers .legend-row:last-child { margin-bottom: 0; }
+.building-tiers .tier-range { color: var(--muted); margin-left: 2px; }
 
 /* Nested, collapsible Pakistan admin-boundary group */
 .legend-group { margin-top: 2px; }

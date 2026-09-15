@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { BUILDINGS_MIN_ZOOM } from './MapView'
+import { BUILDINGS_MIN_ZOOM, BUILDINGS_HEIGHT_TIERS } from './MapView'
 
 function Toggle({ checked, onChange, label, disabled }) {
   return (
@@ -235,6 +235,16 @@ export default function Legend({
             )}
             {buildingsStatus === 'error' && (
               <div className="era5-error">Buildings unavailable{buildingsError ? ` — ${buildingsError}` : ''}</div>
+            )}
+            {buildingsVisible && buildingsStatus === 'ready' && (
+              <div className="legend-group-body building-tiers">
+                {BUILDINGS_HEIGHT_TIERS.map((tier) => (
+                  <div className="legend-row" key={tier.label}>
+                    <span className="swatch buildings" style={{ background: tier.color, borderColor: tier.color }} />
+                    {tier.label} <span className="tier-range">({tier.range})</span>
+                  </div>
+                ))}
+              </div>
             )}
 
             {era5 && (
