@@ -605,6 +605,17 @@ table.ds-table td.pos { color: var(--blue); }
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
+.trends-modal.fullscreen {
+  width: calc(100vw - 48px);
+  height: calc(100vh - 48px);
+  max-height: calc(100vh - 48px);
+  /* A flex column so the body below can take "the rest of the height after
+     the header" via flex:1 -- a plain height:100% on the body would instead
+     mean 100% of the *modal's* height, stacking on top of the header's own
+     space and overflowing by exactly the header's height. */
+  display: flex;
+  flex-direction: column;
+}
 .trends-header {
   display: flex;
   align-items: flex-start;
@@ -621,27 +632,91 @@ table.ds-table td.pos { color: var(--blue); }
 .trends-header:active { cursor: grabbing; }
 .trends-title { font-size: 16px; font-weight: 700; }
 .trends-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.trends-header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.trends-header-actions button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+.trends-header-actions button:hover { color: var(--text); background: rgba(255,255,255,0.08); }
 .trends-body { padding: 16px; }
 
-.trends-svg { width: 100%; display: block; cursor: crosshair; margin-bottom: 12px; }
+/* Full screen: chart and table sit side by side instead of stacked, so the
+   chart can actually use the extra width (rather than just centering a
+   bigger chart above the same skinny table), and the table tucks into a
+   compact column on the right instead of spanning full width. */
+.trends-modal.fullscreen .trends-body {
+  display: flex;
+  /* Default (stretch) alignment -- .trends-chart-wrap fills the row's full
+     height, so its clientHeight is a real measurement of the available
+     space (see TrendsPanel's ResizeObserver) rather than a guessed cap. */
+  gap: 24px;
+  flex: 1;
+  min-height: 0;
+}
+.trends-modal.fullscreen .trends-side { align-self: flex-start; }
+.trends-modal.fullscreen .trends-chart-wrap { flex: 1; min-width: 0; margin-bottom: 0; }
+
+/* Sized in JS (see TrendsPanel's chartSize/ResizeObserver) -- capped in
+   height so full screen's much wider container can't also make it much
+   taller and push the panel past one screen; centered in the leftover
+   width when narrower than the wrapper. */
+.trends-chart-wrap {
+  width: 100%;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.trends-svg { cursor: crosshair; flex-shrink: 0; }
+
+/* The data-table column. Full-width block below the chart normally; in
+   full screen it becomes a fixed, compact sidebar (smaller type, tighter
+   rows) beside the (now much bigger) chart instead. */
+.trends-side { width: 100%; }
+.trends-modal.fullscreen .trends-side {
+  width: 270px;
+  flex-shrink: 0;
+  max-height: 100%;
+  overflow-y: auto;
+}
+.trends-modal.fullscreen .trends-side .ds-section-title { font-size: 10px; margin-bottom: 6px; }
+.trends-modal.fullscreen .trends-side table.ds-table { font-size: 10.5px; }
+.trends-modal.fullscreen .trends-side table.ds-table th,
+.trends-modal.fullscreen .trends-side table.ds-table td { padding: 3px; }
+.trends-modal.fullscreen .trends-side .ds-footer-note { font-size: 9.5px; margin-top: 10px; padding-top: 8px; line-height: 1.4; }
 .trends-chart-title { font-size: 10.5px; fill: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
 .trends-gridline { stroke: var(--border); stroke-width: 1; }
 .trends-value-label { font-size: 11px; fill: var(--text); font-weight: 600; }
 .trends-axis-label { font-size: 10px; fill: var(--muted); }
 .trends-crosshair { stroke: var(--muted); stroke-width: 1; }
 
-/* Fixed height, always rendered -- populated on hover, but the reserved
-   space stays constant (empty/placeholder otherwise) so hovering never
-   shifts the data table below it. */
-.trends-tooltip {
-  height: 96px;
+/* Follows the cursor over the chart -- fixed-position (viewport
+   coordinates), flipped to whichever side keeps it on-screen by
+   clampTooltipPos() in the component. Doesn't occupy layout space, so it
+   can't shift the data table below the chart the way a reserved box would. */
+.trends-floating-tooltip {
+  position: fixed;
+  z-index: 30;
+  pointer-events: none;
+  width: 230px;
   box-sizing: border-box;
-  background: rgba(255,255,255,0.04);
+  background: var(--bar-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
-  margin-bottom: 14px;
   font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
 }
 .trends-tooltip-period { font-weight: 700; margin-bottom: 6px; }
 .trends-tooltip-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -650,13 +725,3 @@ table.ds-table td.pos { color: var(--blue); }
 .trends-key { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; }
 .trends-tooltip-label { color: var(--muted); flex: 1; }
 .trends-tooltip-value { font-weight: 700; }
-.trends-tooltip-placeholder {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  font-size: 12px;
-  font-style: italic;
-  text-align: center;
-}

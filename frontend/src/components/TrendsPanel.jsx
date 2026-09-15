@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 // Colors validated (node scripts/validate_palette.js) against this app's
 // actual dark panel background (#0f151c): blue/orange clear every CVD and
@@ -14,6 +14,16 @@ const PAD_L = 46
 const PAD_R = 16
 const PAD_TOP = 14
 const PAD_BOTTOM = 10
+// A cap on rendered chart height -- without it, full screen (much wider
+// container) scales the chart's height right along with its width, since
+// it keeps the same proportions, and the whole panel ends up taller than
+// the viewport. In full screen the actual available height is measured
+// instead (the chart wrapper stretches to fill its flex row -- see
+// .trends-modal.fullscreen .trends-body in App.css), so the chart uses
+// exactly the real budget at any window size; this fixed cap is only for
+// the normal (stacked) layout, where the wrapper is sized by its own
+// content rather than stretched.
+const CHART_MAX_H = 420
 
 function periodLabel(p) {
   return `${p.startYear}–${p.endYear}`
@@ -87,12 +97,31 @@ function LineChart({ title, unit, values, color, formatValue, activeIndex }) {
   )
 }
 
+// Floating tooltip's assumed footprint, used to flip it to whichever side of
+// the cursor keeps it fully on-screen -- cheaper than measuring the actual
+// rendered box, and this tooltip's size barely varies (period + 3 rows).
+const TOOLTIP_W = 230
+const TOOLTIP_H = 104
+const TOOLTIP_OFFSET = 16
+
+function clampTooltipPos(clientX, clientY) {
+  let left = clientX + TOOLTIP_OFFSET
+  let top = clientY + TOOLTIP_OFFSET
+  if (left + TOOLTIP_W > window.innerWidth) left = clientX - TOOLTIP_W - TOOLTIP_OFFSET
+  if (top + TOOLTIP_H > window.innerHeight) top = clientY - TOOLTIP_H - TOOLTIP_OFFSET
+  return { left: Math.max(4, left), top: Math.max(4, top) }
+}
+
 export default function TrendsPanel({ open, onClose, data, status, error }) {
   const [activeIndex, setActiveIndex] = useState(null)
+  const [tooltipPos, setTooltipPos] = useState(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   // Draggable via the header, same pattern as the Legend panel: null pos
   // means "use the default CSS position" (centered), and a drag switches it
-  // to an explicit fixed pixel position.
+  // to an explicit fixed pixel position. Disabled while fullscreen -- there's
+  // nowhere to drag to, and toggling fullscreen resets any prior drag so it
+  // doesn't leave the panel stranded off-position when un-maximized.
   const modalRef = useRef(null)
   const dragOffset = useRef({ x: 0, y: 0 })
   const [pos, setPos] = useState(null)
@@ -110,6 +139,7 @@ export default function TrendsPanel({ open, onClose, data, status, error }) {
   }
 
   const handleHeaderPointerDown = (e) => {
+    if (isFullscreen) return
     const modal = modalRef.current
     if (!modal) return
     const rect = modal.getBoundingClientRect()
@@ -129,7 +159,12 @@ export default function TrendsPanel({ open, onClose, data, status, error }) {
     e.currentTarget.releasePointerCapture(e.pointerId)
   }
 
-  const modalStyle = pos ? { position: 'fixed', left: pos.left, top: pos.top, margin: 0 } : undefined
+  const toggleFullscreen = () => {
+    setIsFullscreen((f) => !f)
+    setPos(null)
+  }
+
+  const modalStyle = pos && !isFullscreen ? { position: 'fixed', left: pos.left, top: pos.top, margin: 0 } : undefined
 
   const periods = data || []
   const n = periods.length
@@ -146,11 +181,47 @@ export default function TrendsPanel({ open, onClose, data, status, error }) {
       if (d < nearestDist) { nearestDist = d; nearest = i }
     }
     setActiveIndex(nearest)
+    setTooltipPos(clampTooltipPos(e.clientX, e.clientY))
   }
 
   const active = activeIndex != null ? periods[activeIndex] : null
 
   const svgHeight = CHART_H * 2 + 34 // two charts + gap/x-axis band
+  const chartRatio = CHART_W / svgHeight
+
+  // Measures the wrapper's actual width (it's just the modal body's content
+  // width outside fullscreen, but grows a lot in fullscreen) and derives the
+  // chart's rendered pixel size from it -- capped at CHART_MAX_H so a wide
+  // container doesn't also mean a tall one; width is then derived back from
+  // the capped height, and the chart sits centered in the leftover width.
+  const chartWrapRef = useRef(null)
+  const [chartSize, setChartSize] = useState({ width: CHART_W, height: svgHeight })
+
+  useEffect(() => {
+    const el = chartWrapRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const update = () => {
+      const containerWidth = el.clientWidth
+      if (!containerWidth) return
+      // Full screen: the wrapper is stretched to fill its flex row (see
+      // App.css), so its own clientHeight is a real measurement of the
+      // space actually available -- not a guess. Normal layout: the
+      // wrapper is sized by its content, so there's nothing to measure;
+      // fall back to the fixed cap instead.
+      const maxH = isFullscreen && el.clientHeight > 0 ? el.clientHeight : CHART_MAX_H
+      let width = containerWidth
+      let height = width / chartRatio
+      if (height > maxH) {
+        height = maxH
+        width = height * chartRatio
+      }
+      setChartSize({ width, height })
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [chartRatio, isFullscreen])
 
   const xTicks = useMemo(() => periods.map((p, i) => ({ x: xScale(i, n), label: periodLabel(p) })), [periods, n])
 
@@ -158,24 +229,54 @@ export default function TrendsPanel({ open, onClose, data, status, error }) {
 
   return (
     <div className="trends-overlay" onClick={onClose}>
-      <div className="trends-modal" ref={modalRef} style={modalStyle} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={`trends-modal${isFullscreen ? ' fullscreen' : ''}`}
+        ref={modalRef}
+        style={modalStyle}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div
           className="trends-header"
           onPointerDown={handleHeaderPointerDown}
           onPointerMove={handleHeaderPointerMove}
           onPointerUp={handleHeaderPointerUp}
-          title="Drag to move"
+          title={isFullscreen ? undefined : 'Drag to move'}
         >
           <div>
             <div className="trends-title">Glacier change vs. temperature</div>
             <div className="trends-sub">HKH region · 1999–2019</div>
           </div>
-          <button
-            className="ds-close"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={onClose}
-            title="Close"
-          >✕</button>
+          <div className="trends-header-actions">
+            <button
+              className="ds-close"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={toggleFullscreen}
+              title={isFullscreen ? 'Exit full screen' : 'Full screen'}
+              aria-label={isFullscreen ? 'Exit full screen' : 'Full screen'}
+            >
+              {isFullscreen ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 3 9 9 3 9" />
+                  <polyline points="15 3 15 9 21 9" />
+                  <polyline points="9 21 9 15 3 15" />
+                  <polyline points="15 21 15 15 21 15" />
+                </svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 9 3 3 9 3" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="21 15 21 21 15 21" />
+                  <polyline points="9 21 3 21 3 15" />
+                </svg>
+              )}
+            </button>
+            <button
+              className="ds-close"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={onClose}
+              title="Close"
+            >✕</button>
+          </div>
         </div>
 
         <div className="trends-body">
@@ -184,10 +285,11 @@ export default function TrendsPanel({ open, onClose, data, status, error }) {
 
           {status === 'ready' && n > 0 && (
             <>
+              <div className="trends-chart-wrap" ref={chartWrapRef}>
               <svg
                 viewBox={`0 0 ${CHART_W} ${svgHeight}`}
-                width="100%"
-                height={svgHeight}
+                width={chartSize.width}
+                height={chartSize.height}
                 onMouseMove={handleMove}
                 onMouseLeave={() => setActiveIndex(null)}
                 className="trends-svg"
@@ -223,70 +325,78 @@ export default function TrendsPanel({ open, onClose, data, status, error }) {
                 </g>
 
                 {xTicks.map((t, i) => (
-                  <text key={i} x={t.x} y={svgHeight - 4} textAnchor="middle" className="trends-axis-label">
+                  <text
+                    key={i}
+                    x={t.x}
+                    y={svgHeight - 4}
+                    textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
+                    className="trends-axis-label"
+                  >
                     {t.label}
                   </text>
                 ))}
               </svg>
-
-              {/* Always rendered at a fixed height -- populated on hover, but
-                  reserving the same space empty so the layout (and the data
-                  table below it) doesn't shift as the pointer moves on/off
-                  the chart. */}
-              <div className="trends-tooltip">
-                {active ? (
-                  <>
-                    <div className="trends-tooltip-period">{active.startYear}–{active.endYear}</div>
-                    <div className="trends-tooltip-row">
-                      <span className="trends-key" style={{ background: GLACIER_COLOR }} />
-                      <span className="trends-tooltip-label">Elevation change</span>
-                      <span className="trends-tooltip-value">{active.elevationChangeRateM?.toFixed(3)} m/yr</span>
-                    </div>
-                    <div className="trends-tooltip-row">
-                      <span className="trends-key" style={{ background: TEMP_COLOR }} />
-                      <span className="trends-tooltip-label">Mean temperature</span>
-                      <span className="trends-tooltip-value">{active.meanTempC?.toFixed(2)} °C</span>
-                    </div>
-                    <div className="trends-tooltip-row muted">
-                      <span className="trends-tooltip-label">Glaciers sampled</span>
-                      <span className="trends-tooltip-value">{active.glacierCount?.toLocaleString()}</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="trends-tooltip-placeholder">Hover the chart for period details</div>
-                )}
               </div>
 
-              <div className="ds-section-title">Data table</div>
-              <table className="ds-table">
-                <thead>
-                  <tr><th>Period</th><th>Elev. Δ (m/yr)</th><th>Mean temp</th><th>Glaciers</th></tr>
-                </thead>
-                <tbody>
-                  {periods.map((p, i) => (
-                    <tr key={i}>
-                      <td>{p.startYear}–{p.endYear}</td>
-                      <td className={p.elevationChangeRateM < 0 ? 'neg' : p.elevationChangeRateM > 0 ? 'pos' : ''}>
-                        {p.elevationChangeRateM != null ? p.elevationChangeRateM.toFixed(3) : '—'}
-                      </td>
-                      <td>{p.meanTempC != null ? `${p.meanTempC.toFixed(2)} °C` : '—'}</td>
-                      <td>{p.glacierCount?.toLocaleString() ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {/* Beside the chart (not below it) in full screen -- see
+                  .trends-modal.fullscreen .trends-body in App.css -- and
+                  compacted there too (smaller type, tighter rows), since the
+                  chart is the point and the table is backup detail. */}
+              <div className="trends-side">
+                <div className="ds-section-title">Data table</div>
+                <table className="ds-table">
+                  <thead>
+                    <tr><th>Period</th><th>Elev. Δ (m/yr)</th><th>Mean temp</th><th>Glaciers</th></tr>
+                  </thead>
+                  <tbody>
+                    {periods.map((p, i) => (
+                      <tr key={i}>
+                        <td>{p.startYear}–{p.endYear}</td>
+                        <td className={p.elevationChangeRateM < 0 ? 'neg' : p.elevationChangeRateM > 0 ? 'pos' : ''}>
+                          {p.elevationChangeRateM != null ? p.elevationChangeRateM.toFixed(3) : '—'}
+                        </td>
+                        <td>{p.meanTempC != null ? `${p.meanTempC.toFixed(2)} °C` : '—'}</td>
+                        <td>{p.glacierCount?.toLocaleString() ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
 
-              <div className="ds-footer-note">
-                Elevation change: area-weighted mean across every HKH glacier with a
-                figure for that period (Hugonnet et al. 2021), the actual resolution
-                the satellite record supports -- not truly annual. Temperature: ERA5
-                monthly reanalysis (ECMWF), averaged over the HKH boundary for each
-                period, via Google Earth Engine.
+                <div className="ds-footer-note">
+                  Elevation change: area-weighted mean across every HKH glacier with a
+                  figure for that period (Hugonnet et al. 2021), the actual resolution
+                  the satellite record supports -- not truly annual. Temperature: ERA5
+                  monthly reanalysis (ECMWF), averaged over the HKH boundary for each
+                  period, via Google Earth Engine.
+                </div>
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* Fixed-position, follows the cursor -- lives outside the scrollable
+          modal body so it's never clipped by overflow:auto, and flips to
+          whichever side of the cursor keeps it on-screen. */}
+      {active && tooltipPos && (
+        <div className="trends-floating-tooltip" style={{ left: tooltipPos.left, top: tooltipPos.top }}>
+          <div className="trends-tooltip-period">{active.startYear}–{active.endYear}</div>
+          <div className="trends-tooltip-row">
+            <span className="trends-key" style={{ background: GLACIER_COLOR }} />
+            <span className="trends-tooltip-label">Elevation Δ</span>
+            <span className="trends-tooltip-value">{active.elevationChangeRateM?.toFixed(3)} m/yr</span>
+          </div>
+          <div className="trends-tooltip-row">
+            <span className="trends-key" style={{ background: TEMP_COLOR }} />
+            <span className="trends-tooltip-label">Mean temperature</span>
+            <span className="trends-tooltip-value">{active.meanTempC?.toFixed(2)} °C</span>
+          </div>
+          <div className="trends-tooltip-row muted">
+            <span className="trends-tooltip-label">Glaciers sampled</span>
+            <span className="trends-tooltip-value">{active.glacierCount?.toLocaleString()}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
