@@ -7,21 +7,13 @@ than being stuck with one tile baked in at build time.
 """
 
 from functools import lru_cache
-from pathlib import Path
 
 import ee
 
-SERVICE_ACCOUNT = "portal@my-project-3191-1760691930746.iam.gserviceaccount.com"
-KEY_FILE = Path.home() / ".gcp-keys" / "my-project-3191-1760691930746-feca44372dda.json"
-PROJECT_ID = "my-project-3191-1760691930746"
+import earth_engine
 
 COLLECTION_ID = "ECMWF/ERA5/MONTHLY"
 BAND = "mean_2m_air_temperature"
-
-# HKH study area boundary (actual region outline, not just a bounding box) --
-# same asset shown on the frontend map. Shared read access was granted to
-# the service account above.
-BOUNDARY_ASSET_ID = "projects/endless-gamma-379613/assets/HKH"
 
 VIS_PARAMS = {
     "bands": [BAND],
@@ -34,35 +26,24 @@ VIS_PARAMS = {
     ],
 }
 
-_initialized = False
-
 
 class Era5Unavailable(RuntimeError):
     """Raised when Earth Engine can't be reached or isn't configured."""
 
 
-def _ensure_init():
-    global _initialized
-    if _initialized:
-        return
-    if not KEY_FILE.exists():
-        raise Era5Unavailable(f"Service account key not found at {KEY_FILE}")
-    try:
-        credentials = ee.ServiceAccountCredentials(SERVICE_ACCOUNT, str(KEY_FILE))
-        ee.Initialize(credentials, project=PROJECT_ID)
-    except Exception as exc:  # noqa: BLE001 -- surface any EE/auth failure uniformly
-        raise Era5Unavailable(str(exc)) from exc
-    _initialized = True
-
-
 def _collection():
-    _ensure_init()
+    try:
+        earth_engine.ensure_init()
+    except earth_engine.EarthEngineUnavailable as exc:
+        raise Era5Unavailable(str(exc)) from exc
     return ee.ImageCollection(COLLECTION_ID)
 
 
 def _boundary_geometry():
-    _ensure_init()
-    return ee.FeatureCollection(BOUNDARY_ASSET_ID).geometry()
+    try:
+        return earth_engine.boundary_geometry()
+    except earth_engine.EarthEngineUnavailable as exc:
+        raise Era5Unavailable(str(exc)) from exc
 
 
 @lru_cache(maxsize=1)

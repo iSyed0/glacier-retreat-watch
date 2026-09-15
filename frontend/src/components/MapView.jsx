@@ -130,6 +130,9 @@ export default function MapView({
   onFeatureClick,
   recenterSignal,
   onZoomChange,
+  popRasterVisible,
+  popRasterOpacity,
+  popRasterTileUrl,
 }) {
   const pkVisible = { national: pkNationalVisible, provinces: pkProvincesVisible, districts: pkDistrictsVisible }
   const containerRef = useRef(null)
@@ -145,7 +148,7 @@ export default function MapView({
   // after the mount effect's closure was created -- always sees the current
   // toggle state instead of whatever was true when the map was first built.
   const stateRef = useRef({})
-  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex }
+  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity }
 
   // One-time map setup.
   useEffect(() => {
@@ -215,7 +218,7 @@ export default function MapView({
     // markers, boundaries, and ERA5 overlay survive a basemap switch.
     function addOverlayLayers() {
       if (map.getSource('hkh-boundary')) return // already (re)built for this style
-      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex } = stateRef.current
+      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity } = stateRef.current
 
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
@@ -358,6 +361,22 @@ export default function MapView({
           source: 'era5-temp',
           layout: { visibility: era5Visible ? 'visible' : 'none' },
           paint: { 'raster-opacity': era5Opacity },
+        }, 'cluster-dots')
+      }
+
+      if (popRasterTileUrl) {
+        map.addSource('population-raster', {
+          type: 'raster',
+          tiles: [popRasterTileUrl],
+          tileSize: 256,
+          attribution: config.populationRaster?.attribution,
+        })
+        map.addLayer({
+          id: 'population-raster-layer',
+          type: 'raster',
+          source: 'population-raster',
+          layout: { visibility: popRasterVisible ? 'visible' : 'none' },
+          paint: { 'raster-opacity': popRasterOpacity },
         }, 'cluster-dots')
       }
 
@@ -536,6 +555,57 @@ export default function MapView({
     if (!map || !map.getLayer('era5-temp-layer')) return
     map.setPaintProperty('era5-temp-layer', 'raster-opacity', era5Opacity)
   }, [era5Opacity])
+
+  // Add the population-density raster once its tile URL resolves (a single
+  // fetch, unlike ERA5's per-month tile -- see App.jsx) -- same pattern as
+  // ERA5 above otherwise.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !popRasterTileUrl) return
+
+    const apply = () => {
+      const source = map.getSource('population-raster')
+      if (source) {
+        source.setTiles([popRasterTileUrl])
+        return
+      }
+      map.addSource('population-raster', {
+        type: 'raster',
+        tiles: [popRasterTileUrl],
+        tileSize: 256,
+        attribution: config.populationRaster?.attribution,
+      })
+      const beforeId = map.getLayer('cluster-dots') ? 'cluster-dots' : undefined
+      map.addLayer({
+        id: 'population-raster-layer',
+        type: 'raster',
+        source: 'population-raster',
+        layout: { visibility: popRasterVisible ? 'visible' : 'none' },
+        paint: { 'raster-opacity': popRasterOpacity },
+      }, beforeId)
+    }
+
+    if (map.isStyleLoaded()) {
+      apply()
+    } else {
+      map.once('load', apply)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popRasterTileUrl])
+
+  // Sync population-raster layer visibility with the toggle.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.getLayer('population-raster-layer')) return
+    map.setLayoutProperty('population-raster-layer', 'visibility', popRasterVisible ? 'visible' : 'none')
+  }, [popRasterVisible])
+
+  // Sync population-raster layer opacity with the slider.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.getLayer('population-raster-layer')) return
+    map.setPaintProperty('population-raster-layer', 'raster-opacity', popRasterOpacity)
+  }, [popRasterOpacity])
 
   // Sync study area boundary visibility with its toggle.
   useEffect(() => {

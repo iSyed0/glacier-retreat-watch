@@ -81,8 +81,16 @@ export default function Legend({
   buildingsError,
   buildingsCount,
   mapZoom,
+  popRaster,
+  popRasterVisible,
+  onTogglePopRaster,
+  popRasterOpacity,
+  onPopRasterOpacityChange,
+  popRasterStatus,
+  popRasterError,
 }) {
   const gradient = era5 ? `linear-gradient(to right, ${era5.palette.map((c) => '#' + c).join(',')})` : ''
+  const popRasterGradient = popRaster ? `linear-gradient(to right, ${popRaster.palette.map((c) => '#' + c).join(',')})` : ''
 
   const panelRef = useRef(null)
   const dragOffset = useRef({ x: 0, y: 0 })
@@ -245,6 +253,45 @@ export default function Legend({
                   </div>
                 ))}
               </div>
+            )}
+
+            {popRaster && (
+              <>
+                <LayerRow
+                  swatch={<span className="swatch gradient" style={{ background: popRasterGradient }} />}
+                  label="Population"
+                  checked={popRasterVisible}
+                  onChange={onTogglePopRaster}
+                  disabled={popRasterStatus !== 'ready'}
+                />
+                {popRasterStatus === 'error' && (
+                  <div className="era5-error">Population unavailable{popRasterError ? ` — ${popRasterError}` : ''}</div>
+                )}
+                {popRasterVisible && popRasterStatus === 'ready' && (
+                  <div id="era5-controls">
+                    <div className="era5-field">
+                      <label htmlFor="pop-raster-opacity">Opacity</label>
+                      <input
+                        id="pop-raster-opacity"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={popRasterOpacity}
+                        onChange={(e) => onPopRasterOpacityChange(Number(e.target.value))}
+                      />
+                      <span className="era5-opacity-value">{Math.round(popRasterOpacity * 100)}%</span>
+                    </div>
+                    <div id="era5-scale">
+                      <div className="era5-scale-bar" style={{ background: popRasterGradient }} />
+                      <div className="era5-scale-labels">
+                        <span>0</span>
+                        <span>{popRaster.maxDensity.toLocaleString()}+ /km²</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {era5 && (

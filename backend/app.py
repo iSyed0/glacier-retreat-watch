@@ -15,6 +15,8 @@ from fastapi.staticfiles import StaticFiles
 
 import buildings
 import era5
+import population_raster
+import trends
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -57,6 +59,16 @@ ERA5_LAYER = {
     "palette": era5.VIS_PARAMS["palette"],
 }
 
+# Gridded population density, HKH-cropped. Unlike ERA5 there's no month
+# parameter (CIESIN GPWv4.11 is a single 2020 snapshot), so the static
+# display config here doubles as everything the frontend needs -- no
+# separate per-request metadata call like era5/range.
+POPULATION_RASTER_LAYER = {
+    "attribution": "CIESIN GPWv4.11 (2020) via Google Earth Engine",
+    "maxDensity": population_raster.MAX_DENSITY,
+    "palette": population_raster.VIS_PARAMS["palette"],
+}
+
 app = FastAPI(title="HKH Glacier Watch API")
 
 # Allow the Vite dev server to call the API during development.
@@ -78,6 +90,7 @@ def config():
     return {
         "countryNames": COUNTRY_NAMES,
         "era5": ERA5_LAYER,
+        "populationRaster": POPULATION_RASTER_LAYER,
         "mapCenter": [82.5, 32.0],
         "mapZoom": 2.5,
         # Bounding box of the HKH study area boundary (backend/data/hkh_boundary.geojson)
@@ -122,6 +135,28 @@ def buildings_index():
         return {"tileServer": buildings.TILESERVER_URL, "districts": buildings.get_index()}
     except buildings.BuildingsUnavailable as exc:
         raise HTTPException(status_code=503, detail=f"Buildings tile server unavailable: {exc}")
+
+
+@app.get("/api/population/raster")
+def population_raster_tile():
+    """Live XYZ tile URL for gridded population density (CIESIN GPWv4.11,
+    log10-scaled), HKH-cropped. No parameters -- there's only one snapshot."""
+    try:
+        return population_raster.get_tile()
+    except population_raster.PopulationRasterUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
+
+
+@app.get("/api/trends")
+def glacier_temperature_trends():
+    """Region-wide glacier elevation-change rate vs. mean temperature, one
+    figure per 5-year period across the 1999-2019 record (see trends.py --
+    that's the actual resolution the glacier data supports, not truly
+    annual)."""
+    try:
+        return trends.get_trends()
+    except trends.TrendsUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
 
 
 @app.get("/api/era5/range")
