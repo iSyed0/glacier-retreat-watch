@@ -24,12 +24,39 @@ export default function App() {
   const [pkNationalVisible, setPkNationalVisible] = useState(false)
   const [pkProvincesVisible, setPkProvincesVisible] = useState(false)
   const [pkDistrictsVisible, setPkDistrictsVisible] = useState(false)
+  const [buildingsVisible, setBuildingsVisible] = useState(false)
+  const [buildingsIndex, setBuildingsIndex] = useState(null) // { tileServer, districts: [{id, bounds}] }
+  const [buildingsStatus, setBuildingsStatus] = useState('loading') // loading | ready | error
+  const [buildingsError, setBuildingsError] = useState('')
+  const [mapZoom, setMapZoom] = useState(null)
 
   useEffect(() => {
     fetch('/api/config')
       .then((r) => r.json())
       .then(setConfig)
       .catch((err) => console.error('Failed to load config:', err))
+  }, [])
+
+  // District id + bounds for every building-footprint tileset -- the actual
+  // vector sources are only added to the map once this layer is switched on
+  // (see MapView), but the lightweight index is worth fetching up front.
+  useEffect(() => {
+    fetch('/api/buildings/index')
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}))
+          throw new Error(body.detail || `request failed (${r.status})`)
+        }
+        return r.json()
+      })
+      .then((data) => {
+        setBuildingsIndex(data)
+        setBuildingsStatus('ready')
+      })
+      .catch((err) => {
+        setBuildingsStatus('error')
+        setBuildingsError(err.message)
+      })
   }, [])
 
   // Find out which months are actually queryable, then default to the most recent.
@@ -95,8 +122,11 @@ export default function App() {
           pkNationalVisible={pkNationalVisible}
           pkProvincesVisible={pkProvincesVisible}
           pkDistrictsVisible={pkDistrictsVisible}
+          buildingsVisible={buildingsVisible}
+          buildingsIndex={buildingsIndex}
           onFeatureClick={setSelectedFeature}
           recenterSignal={recenterSignal}
+          onZoomChange={setMapZoom}
         />
       )}
 
@@ -123,6 +153,12 @@ export default function App() {
           onTogglePkProvinces={setPkProvincesVisible}
           pkDistrictsVisible={pkDistrictsVisible}
           onTogglePkDistricts={setPkDistrictsVisible}
+          buildingsVisible={buildingsVisible}
+          onToggleBuildings={setBuildingsVisible}
+          buildingsStatus={buildingsStatus}
+          buildingsError={buildingsError}
+          buildingsCount={buildingsIndex?.districts?.length}
+          mapZoom={mapZoom}
         />
         <DataSheet
           feature={selectedFeature}

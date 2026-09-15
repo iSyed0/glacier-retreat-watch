@@ -14,6 +14,53 @@ const PK_LEVELS = [
   { key: 'districts', url: '/api/boundaries/pakistan/districts', color: '#8ea3b6', lineWidth: 0.75, fillOpacity: 0 },
 ]
 
+// Building footprints -- one vector tileset per Pakistani district on an
+// internal TileServer GL instance (see backend/buildings.py). Footprints
+// are meaningless zoomed out, so the layer itself only renders past z13;
+// combined with each source's own `bounds`, that keeps 160+ district
+// sources from requesting a single tile until the user is actually in view
+// and zoomed in close. Rendered as 3D extrusions using each building's
+// `height` field (falls back to a flat 6m where that's missing/zero) --
+// tilt the camera (right-click-drag, or two-finger drag on touch) to see
+// them stand up; globe projection auto-switches to mercator well before
+// z13, so fill-extrusion (mercator-only) is always in play by then.
+const BUILDINGS_COLOR = '#2dd4bf'
+export const BUILDINGS_MIN_ZOOM = 13
+const BUILDINGS_DEFAULT_HEIGHT = 6
+
+function addBuildingLayer(map, tileServer, id, bounds, beforeId) {
+  const layerId = `bld-${id}`
+  if (map.getLayer(layerId)) return
+  map.addSource(layerId, {
+    type: 'vector',
+    tiles: [`${tileServer}/data/${id}/{z}/{x}/{y}.pbf`],
+    bounds,
+    minzoom: 2,
+    maxzoom: 17,
+  })
+  map.addLayer({
+    id: layerId,
+    type: 'fill-extrusion',
+    source: layerId,
+    'source-layer': 'buildings',
+    minzoom: BUILDINGS_MIN_ZOOM,
+    paint: {
+      'fill-extrusion-color': BUILDINGS_COLOR,
+      // Buildings "grow" out of the ground over the first fraction of a
+      // zoom level past BUILDINGS_MIN_ZOOM, same trick Mapbox's own 3D
+      // buildings example uses, rather than popping in at full height.
+      'fill-extrusion-height': [
+        'interpolate', ['linear'], ['zoom'],
+        BUILDINGS_MIN_ZOOM, 0,
+        BUILDINGS_MIN_ZOOM + 0.1, ['max', ['coalesce', ['get', 'height'], BUILDINGS_DEFAULT_HEIGHT], 3],
+      ],
+      'fill-extrusion-base': 0,
+      'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], BUILDINGS_MIN_ZOOM, 0, 15, 0.8, 17, 0.92],
+      'fill-extrusion-vertical-gradient': true,
+    },
+  }, beforeId)
+}
+
 export default function MapView({
   config,
   mapStyleId,
@@ -24,8 +71,11 @@ export default function MapView({
   pkNationalVisible,
   pkProvincesVisible,
   pkDistrictsVisible,
+  buildingsVisible,
+  buildingsIndex,
   onFeatureClick,
   recenterSignal,
+  onZoomChange,
 }) {
   const pkVisible = { national: pkNationalVisible, provinces: pkProvincesVisible, districts: pkDistrictsVisible }
   const containerRef = useRef(null)
@@ -41,7 +91,7 @@ export default function MapView({
   // after the mount effect's closure was created -- always sees the current
   // toggle state instead of whatever was true when the map was first built.
   const stateRef = useRef({})
-  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity }
+  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex }
 
   // One-time map setup.
   useEffect(() => {
@@ -60,8 +110,16 @@ export default function MapView({
     mapRef.current = map
     window.map = map // exposed for debugging
 
-    map.addControl(new mapboxgl.NavigationControl(), 'bottom-right')
+    // visualizePitch tilts the compass icon itself with the camera -- a
+    // visual hint that dragging (right-click, or ctrl+drag) tilts the view,
+    // which is how you actually see the building extrusions stand up.
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right')
     map.scrollZoom.enable()
+
+    // Reported up to the status panel so the Buildings row can show a live
+    // "zoom in further" readout instead of a static, easy-to-miss hint.
+    onZoomChange?.(map.getZoom())
+    map.on('zoom', () => onZoomChange?.(map.getZoom()))
 
     // Auto-spin the globe on load -- stops for good the moment the user
     // clicks or drags, and only starts again on a page refresh.
@@ -102,7 +160,7 @@ export default function MapView({
     // markers, boundaries, and ERA5 overlay survive a basemap switch.
     function addOverlayLayers() {
       if (map.getSource('hkh-boundary')) return // already (re)built for this style
-      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity } = stateRef.current
+      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex } = stateRef.current
 
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
@@ -264,6 +322,12 @@ export default function MapView({
           paint: { 'line-color': color, 'line-width': lineWidth, 'line-opacity': 0.85 },
         }, 'cluster-dots')
       })
+
+      if (buildingsVisible && buildingsIndex) {
+        buildingsIndex.districts.forEach(({ id, bounds }) => {
+          addBuildingLayer(map, buildingsIndex.tileServer, id, bounds, 'cluster-dots')
+        })
+      }
     }
 
     map.on('style.load', () => {
@@ -473,6 +537,34 @@ export default function MapView({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pkNationalVisible, pkProvincesVisible, pkDistrictsVisible])
+
+  // Building footprints -- same lazy, "don't fetch until asked" pattern as
+  // the Pakistan boundaries above: the ~160 district sources are only
+  // created the first time this toggle is switched on, and just have their
+  // visibility flipped after that.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !buildingsIndex) return
+
+    const apply = () => {
+      const beforeId = map.getLayer('cluster-dots') ? 'cluster-dots' : undefined
+      buildingsIndex.districts.forEach(({ id, bounds }) => {
+        const layerId = `bld-${id}`
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(layerId, 'visibility', buildingsVisible ? 'visible' : 'none')
+          return
+        }
+        if (!buildingsVisible) return // nothing to hide -- don't add until asked
+        addBuildingLayer(map, buildingsIndex.tileServer, id, bounds, beforeId)
+      })
+    }
+
+    if (map.isStyleLoaded()) {
+      apply()
+    } else {
+      map.once('load', apply)
+    }
+  }, [buildingsVisible, buildingsIndex])
 
   return <div id="map" ref={containerRef} />
 }

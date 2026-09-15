@@ -1,23 +1,24 @@
 import { useRef, useState } from 'react'
+import { BUILDINGS_MIN_ZOOM } from './MapView'
 
-function Toggle({ checked, onChange, label }) {
+function Toggle({ checked, onChange, label, disabled }) {
   return (
-    <label className="toggle-switch" aria-label={label}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <label className={`toggle-switch${disabled ? ' disabled' : ''}`} aria-label={label}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span className="track" />
       <span className="thumb" />
     </label>
   )
 }
 
-function LayerRow({ swatch, label, checked, onChange, indent }) {
+function LayerRow({ swatch, label, checked, onChange, indent, disabled }) {
   return (
-    <div className={`layer-row${indent ? ' indent' : ''}`}>
+    <div className={`layer-row${indent ? ' indent' : ''}${disabled ? ' disabled' : ''}`}>
       <span className="layer-row-main">
         {swatch}
         <span className="layer-row-label">{label}</span>
       </span>
-      <Toggle checked={checked} onChange={onChange} label={label} />
+      <Toggle checked={checked} onChange={onChange} label={label} disabled={disabled} />
     </div>
   )
 }
@@ -74,6 +75,12 @@ export default function Legend({
   onTogglePkProvinces,
   pkDistrictsVisible,
   onTogglePkDistricts,
+  buildingsVisible,
+  onToggleBuildings,
+  buildingsStatus,
+  buildingsError,
+  buildingsCount,
+  mapZoom,
 }) {
   const gradient = era5 ? `linear-gradient(to right, ${era5.palette.map((c) => '#' + c).join(',')})` : ''
 
@@ -209,6 +216,26 @@ export default function Legend({
                 </div>
               )}
             </div>
+
+            <LayerRow
+              swatch={<span className="swatch buildings" />}
+              label="Buildings"
+              checked={buildingsVisible}
+              onChange={onToggleBuildings}
+              disabled={buildingsStatus !== 'ready'}
+            />
+            {buildingsVisible && buildingsStatus === 'ready' && (
+              mapZoom != null && mapZoom < BUILDINGS_MIN_ZOOM ? (
+                <div className="legend-hint active">
+                  Zoom in to see footprints — z{mapZoom.toFixed(1)} of {BUILDINGS_MIN_ZOOM}+ needed
+                </div>
+              ) : (
+                <div className="legend-hint">{buildingsCount ? `${buildingsCount} districts loaded` : 'Footprints visible'}</div>
+              )
+            )}
+            {buildingsStatus === 'error' && (
+              <div className="era5-error">Buildings unavailable{buildingsError ? ` — ${buildingsError}` : ''}</div>
+            )}
 
             {era5 && (
               <>

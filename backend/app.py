@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+import buildings
 import era5
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -109,6 +110,18 @@ def pakistan_boundary(level: str):
     if not path.exists():
         raise HTTPException(status_code=503, detail=f"Boundary file not available: {path.name}")
     return FileResponse(path, media_type="application/geo+json")
+
+
+@app.get("/api/buildings/index")
+def buildings_index():
+    """District id + bounds for every building-footprint tileset on the
+    internal tile server, plus the server's own base URL. The frontend
+    builds each vector source from these: tiles at
+    {tileServer}/data/{id}/{z}/{x}/{y}.pbf."""
+    try:
+        return {"tileServer": buildings.TILESERVER_URL, "districts": buildings.get_index()}
+    except buildings.BuildingsUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Buildings tile server unavailable: {exc}")
 
 
 @app.get("/api/era5/range")
