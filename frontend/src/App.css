@@ -614,7 +614,11 @@ table.ds-table td.pos { color: var(--blue); }
   position: sticky;
   top: 0;
   background: var(--bar-bg);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
+.trends-header:active { cursor: grabbing; }
 .trends-title { font-size: 16px; font-weight: 700; }
 .trends-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
 .trends-body { padding: 16px; }
@@ -626,7 +630,12 @@ table.ds-table td.pos { color: var(--blue); }
 .trends-axis-label { font-size: 10px; fill: var(--muted); }
 .trends-crosshair { stroke: var(--muted); stroke-width: 1; }
 
+/* Fixed height, always rendered -- populated on hover, but the reserved
+   space stays constant (empty/placeholder otherwise) so hovering never
+   shifts the data table below it. */
 .trends-tooltip {
+  height: 96px;
+  box-sizing: border-box;
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -641,3 +650,13 @@ table.ds-table td.pos { color: var(--blue); }
 .trends-key { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; }
 .trends-tooltip-label { color: var(--muted); flex: 1; }
 .trends-tooltip-value { font-weight: 700; }
+.trends-tooltip-placeholder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+}

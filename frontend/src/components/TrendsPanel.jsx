@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 // Colors validated (node scripts/validate_palette.js) against this app's
 // actual dark panel background (#0f151c): blue/orange clear every CVD and
@@ -16,7 +16,7 @@ const PAD_TOP = 14
 const PAD_BOTTOM = 10
 
 function periodLabel(p) {
-  return `${String(p.startYear).slice(2)}–${String(p.endYear).slice(2)}`
+  return `${p.startYear}–${p.endYear}`
 }
 
 // Shared x positions (one per period) so the two stacked charts -- and the
@@ -90,6 +90,47 @@ function LineChart({ title, unit, values, color, formatValue, activeIndex }) {
 export default function TrendsPanel({ open, onClose, data, status, error }) {
   const [activeIndex, setActiveIndex] = useState(null)
 
+  // Draggable via the header, same pattern as the Legend panel: null pos
+  // means "use the default CSS position" (centered), and a drag switches it
+  // to an explicit fixed pixel position.
+  const modalRef = useRef(null)
+  const dragOffset = useRef({ x: 0, y: 0 })
+  const [pos, setPos] = useState(null)
+  const [dragging, setDragging] = useState(false)
+
+  const clampPos = (left, top) => {
+    const modal = modalRef.current
+    const margin = 24
+    if (!modal) return { left, top }
+    const { width, height } = modal.getBoundingClientRect()
+    return {
+      left: Math.min(Math.max(left, -width + margin), window.innerWidth - margin),
+      top: Math.min(Math.max(top, 0), window.innerHeight - margin),
+    }
+  }
+
+  const handleHeaderPointerDown = (e) => {
+    const modal = modalRef.current
+    if (!modal) return
+    const rect = modal.getBoundingClientRect()
+    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    setPos({ left: rect.left, top: rect.top })
+    setDragging(true)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const handleHeaderPointerMove = (e) => {
+    if (!dragging) return
+    setPos(clampPos(e.clientX - dragOffset.current.x, e.clientY - dragOffset.current.y))
+  }
+
+  const handleHeaderPointerUp = (e) => {
+    setDragging(false)
+    e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+
+  const modalStyle = pos ? { position: 'fixed', left: pos.left, top: pos.top, margin: 0 } : undefined
+
   const periods = data || []
   const n = periods.length
 
@@ -117,13 +158,24 @@ export default function TrendsPanel({ open, onClose, data, status, error }) {
 
   return (
     <div className="trends-overlay" onClick={onClose}>
-      <div className="trends-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="trends-header">
+      <div className="trends-modal" ref={modalRef} style={modalStyle} onClick={(e) => e.stopPropagation()}>
+        <div
+          className="trends-header"
+          onPointerDown={handleHeaderPointerDown}
+          onPointerMove={handleHeaderPointerMove}
+          onPointerUp={handleHeaderPointerUp}
+          title="Drag to move"
+        >
           <div>
             <div className="trends-title">Glacier change vs. temperature</div>
             <div className="trends-sub">HKH region · 1999–2019</div>
           </div>
-          <button className="ds-close" onClick={onClose} title="Close">✕</button>
+          <button
+            className="ds-close"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={onClose}
+            title="Close"
+          >✕</button>
         </div>
 
         <div className="trends-body">
@@ -177,25 +229,33 @@ export default function TrendsPanel({ open, onClose, data, status, error }) {
                 ))}
               </svg>
 
-              {active && (
-                <div className="trends-tooltip">
-                  <div className="trends-tooltip-period">{active.startYear}–{active.endYear}</div>
-                  <div className="trends-tooltip-row">
-                    <span className="trends-key" style={{ background: GLACIER_COLOR }} />
-                    <span className="trends-tooltip-label">Elevation change</span>
-                    <span className="trends-tooltip-value">{active.elevationChangeRateM?.toFixed(3)} m/yr</span>
-                  </div>
-                  <div className="trends-tooltip-row">
-                    <span className="trends-key" style={{ background: TEMP_COLOR }} />
-                    <span className="trends-tooltip-label">Mean temperature</span>
-                    <span className="trends-tooltip-value">{active.meanTempC?.toFixed(2)} °C</span>
-                  </div>
-                  <div className="trends-tooltip-row muted">
-                    <span className="trends-tooltip-label">Glaciers sampled</span>
-                    <span className="trends-tooltip-value">{active.glacierCount?.toLocaleString()}</span>
-                  </div>
-                </div>
-              )}
+              {/* Always rendered at a fixed height -- populated on hover, but
+                  reserving the same space empty so the layout (and the data
+                  table below it) doesn't shift as the pointer moves on/off
+                  the chart. */}
+              <div className="trends-tooltip">
+                {active ? (
+                  <>
+                    <div className="trends-tooltip-period">{active.startYear}–{active.endYear}</div>
+                    <div className="trends-tooltip-row">
+                      <span className="trends-key" style={{ background: GLACIER_COLOR }} />
+                      <span className="trends-tooltip-label">Elevation change</span>
+                      <span className="trends-tooltip-value">{active.elevationChangeRateM?.toFixed(3)} m/yr</span>
+                    </div>
+                    <div className="trends-tooltip-row">
+                      <span className="trends-key" style={{ background: TEMP_COLOR }} />
+                      <span className="trends-tooltip-label">Mean temperature</span>
+                      <span className="trends-tooltip-value">{active.meanTempC?.toFixed(2)} °C</span>
+                    </div>
+                    <div className="trends-tooltip-row muted">
+                      <span className="trends-tooltip-label">Glaciers sampled</span>
+                      <span className="trends-tooltip-value">{active.glacierCount?.toLocaleString()}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="trends-tooltip-placeholder">Hover the chart for period details</div>
+                )}
+              </div>
 
               <div className="ds-section-title">Data table</div>
               <table className="ds-table">
