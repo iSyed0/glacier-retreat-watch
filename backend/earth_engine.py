@@ -17,6 +17,11 @@ PROJECT_ID = "my-project-3191-1760691930746"
 # the service account above.
 BOUNDARY_ASSET_ID = "projects/endless-gamma-379613/assets/HKH"
 
+# Public country-boundary dataset (LSIB) used to clip the HKH boundary down
+# to one country's portion of it -- e.g. the Pakistan-only trend endpoint.
+# Only the country names this app actually needs a clipped boundary for.
+COUNTRY_LSIB_NAMES = {"PK": "Pakistan"}
+
 _initialized = False
 
 
@@ -38,6 +43,18 @@ def ensure_init():
     _initialized = True
 
 
-def boundary_geometry():
+def boundary_geometry(country=None):
+    """The HKH boundary, or (if `country` is given) just the portion of it
+    that falls inside that country -- e.g. country="PK" for the Pakistan
+    slice of the HKH region used by the Pakistan-scoped trend endpoint."""
     ensure_init()
-    return ee.FeatureCollection(BOUNDARY_ASSET_ID).geometry()
+    hkh = ee.FeatureCollection(BOUNDARY_ASSET_ID).geometry()
+    if country is None:
+        return hkh
+    country_name = COUNTRY_LSIB_NAMES.get(country)
+    if not country_name:
+        raise ValueError(f"Unsupported country code: {country}")
+    country_geom = ee.FeatureCollection("USDOS/LSIB_SIMPLE/2017").filter(
+        ee.Filter.eq("country_na", country_name)
+    ).geometry()
+    return hkh.intersection(country_geom, ee.ErrorMargin(1000))

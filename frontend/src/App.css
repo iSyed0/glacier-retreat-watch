@@ -264,6 +264,76 @@
   font-weight: 600;
 }
 
+/* Charts launcher -- floating/draggable/collapsible like #legend, but on
+   the opposite (top-right) side, listing every trend chart so opening one
+   doesn't need its own topbar button (see ChartsPanel.jsx). */
+#charts-panel {
+  position: fixed;
+  top: calc(var(--bar-height) + 16px);
+  right: 16px;
+  width: 250px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  z-index: 6;
+  overflow: hidden;
+}
+#charts-panel.collapsed { width: auto; }
+.charts-panel-header {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 8px 10px 14px;
+}
+.charts-panel-header:active { cursor: grabbing; }
+.charts-panel-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+}
+.charts-panel-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.charts-panel-body { padding: 4px 8px 8px 8px; }
+
+.chart-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--text);
+  text-align: left;
+  padding: 8px 8px;
+  cursor: pointer;
+}
+.chart-row:hover { background: rgba(255,255,255,0.06); }
+.chart-row-icon { color: var(--accent); flex-shrink: 0; display: flex; }
+.chart-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.chart-row-title { font-size: 13px; font-weight: 600; }
+.chart-row-region { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.chart-row-status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.chart-row-status.loading { background: var(--accent); opacity: 1; animation: chart-row-pulse 1.1s ease-in-out infinite; }
+.chart-row-status.error { background: var(--red); opacity: 1; }
+@keyframes chart-row-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+
 /* Toggle-able layer rows -- shared by the boundary, Pakistan sub-layers, and ERA5 rows */
 .layer-row {
   display: flex;
@@ -570,23 +640,12 @@ table.ds-table td.pos { color: var(--blue); }
 #datasheet::-webkit-scrollbar { width: 8px; }
 #datasheet::-webkit-scrollbar-thumb { background: #263340; border-radius: 8px; }
 
-/* Trends button (topbar) + modal */
-.topbar-trends-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 7px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.topbar-trends-btn:hover { background: rgba(255,255,255,0.08); border-color: var(--accent); }
-
-.trends-overlay {
+/* "Trends+" panel (TrendsPanelStats.jsx) -- headline stat cards + a glow
+   accent on the same real glacier-vs-temperature data. Rendered twice in
+   App.jsx (HKH-wide and Pakistan-scoped, each behind its own topbar
+   button) with different title/sub/scopeNote props and data, sharing this
+   one class namespace since the two instances are never open at once. */
+.tplus-overlay {
   position: fixed;
   inset: 0;
   background: rgba(5,8,12,0.7);
@@ -596,7 +655,7 @@ table.ds-table td.pos { color: var(--blue); }
   justify-content: center;
   padding: 24px;
 }
-.trends-modal {
+.tplus-modal {
   background: var(--bar-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -605,18 +664,14 @@ table.ds-table td.pos { color: var(--blue); }
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
-.trends-modal.fullscreen {
+.tplus-modal.fullscreen {
   width: calc(100vw - 48px);
   height: calc(100vh - 48px);
   max-height: calc(100vh - 48px);
-  /* A flex column so the body below can take "the rest of the height after
-     the header" via flex:1 -- a plain height:100% on the body would instead
-     mean 100% of the *modal's* height, stacking on top of the header's own
-     space and overflowing by exactly the header's height. */
   display: flex;
   flex-direction: column;
 }
-.trends-header {
+.tplus-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -629,11 +684,11 @@ table.ds-table td.pos { color: var(--blue); }
   touch-action: none;
   user-select: none;
 }
-.trends-header:active { cursor: grabbing; }
-.trends-title { font-size: 16px; font-weight: 700; }
-.trends-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
-.trends-header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.trends-header-actions button {
+.tplus-header:active { cursor: grabbing; }
+.tplus-title { font-size: 16px; font-weight: 700; }
+.tplus-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.tplus-header-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.tplus-header-actions button {
   background: transparent;
   border: none;
   color: var(--muted);
@@ -648,64 +703,56 @@ table.ds-table td.pos { color: var(--blue); }
   font-size: 16px;
   line-height: 1;
 }
-.trends-header-actions button:hover { color: var(--text); background: rgba(255,255,255,0.08); }
-.trends-body { padding: 16px; }
+.tplus-header-actions button:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+.tplus-body { padding: 16px; }
 
-/* Full screen: chart and table sit side by side instead of stacked, so the
-   chart can actually use the extra width (rather than just centering a
-   bigger chart above the same skinny table), and the table tucks into a
-   compact column on the right instead of spanning full width. */
-.trends-modal.fullscreen .trends-body {
+/* Full screen: the stat row stays full-width up top; chart and table sit
+   side by side below it (via .tplus-main) instead of stacked. */
+.tplus-modal.fullscreen .tplus-body {
   display: flex;
-  /* Default (stretch) alignment -- .trends-chart-wrap fills the row's full
-     height, so its clientHeight is a real measurement of the available
-     space (see TrendsPanel's ResizeObserver) rather than a guessed cap. */
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.tplus-main { width: 100%; }
+.tplus-modal.fullscreen .tplus-main {
+  display: flex;
   gap: 24px;
   flex: 1;
   min-height: 0;
 }
-.trends-modal.fullscreen .trends-side { align-self: flex-start; }
-.trends-modal.fullscreen .trends-chart-wrap { flex: 1; min-width: 0; margin-bottom: 0; }
+.tplus-modal.fullscreen .tplus-side { align-self: flex-start; }
+.tplus-modal.fullscreen .tplus-chart-wrap { flex: 1; min-width: 0; margin-bottom: 0; }
 
-/* Sized in JS (see TrendsPanel's chartSize/ResizeObserver) -- capped in
-   height so full screen's much wider container can't also make it much
-   taller and push the panel past one screen; centered in the leftover
-   width when narrower than the wrapper. */
-.trends-chart-wrap {
+.tplus-chart-wrap {
   width: 100%;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.trends-svg { cursor: crosshair; flex-shrink: 0; }
+.tplus-svg { cursor: crosshair; flex-shrink: 0; }
 
-/* The data-table column. Full-width block below the chart normally; in
-   full screen it becomes a fixed, compact sidebar (smaller type, tighter
-   rows) beside the (now much bigger) chart instead. */
-.trends-side { width: 100%; }
-.trends-modal.fullscreen .trends-side {
+.tplus-side { width: 100%; }
+.tplus-modal.fullscreen .tplus-side {
   width: 270px;
   flex-shrink: 0;
   max-height: 100%;
   overflow-y: auto;
 }
-.trends-modal.fullscreen .trends-side .ds-section-title { font-size: 10px; margin-bottom: 6px; }
-.trends-modal.fullscreen .trends-side table.ds-table { font-size: 10.5px; }
-.trends-modal.fullscreen .trends-side table.ds-table th,
-.trends-modal.fullscreen .trends-side table.ds-table td { padding: 3px; }
-.trends-modal.fullscreen .trends-side .ds-footer-note { font-size: 9.5px; margin-top: 10px; padding-top: 8px; line-height: 1.4; }
-.trends-chart-title { font-size: 10.5px; fill: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
-.trends-gridline { stroke: var(--border); stroke-width: 1; }
-.trends-value-label { font-size: 11px; fill: var(--text); font-weight: 600; }
-.trends-axis-label { font-size: 10px; fill: var(--muted); }
-.trends-crosshair { stroke: var(--muted); stroke-width: 1; }
+.tplus-modal.fullscreen .tplus-side .ds-section-title { font-size: 10px; margin-bottom: 6px; }
+.tplus-modal.fullscreen .tplus-side table.ds-table { font-size: 10.5px; }
+.tplus-modal.fullscreen .tplus-side table.ds-table th,
+.tplus-modal.fullscreen .tplus-side table.ds-table td { padding: 3px; }
+.tplus-modal.fullscreen .tplus-side .ds-footer-note { font-size: 9.5px; margin-top: 10px; padding-top: 8px; line-height: 1.4; }
+.tplus-chart-title { font-size: 10.5px; fill: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.tplus-gridline { stroke: var(--border); stroke-width: 1; }
+.tplus-value-label { font-size: 11px; fill: var(--text); font-weight: 600; }
+.tplus-axis-label { font-size: 10px; fill: var(--muted); }
+.tplus-crosshair { stroke: var(--muted); stroke-width: 1; }
 
-/* Follows the cursor over the chart -- fixed-position (viewport
-   coordinates), flipped to whichever side keeps it on-screen by
-   clampTooltipPos() in the component. Doesn't occupy layout space, so it
-   can't shift the data table below the chart the way a reserved box would. */
-.trends-floating-tooltip {
+.tplus-floating-tooltip {
   position: fixed;
   z-index: 30;
   pointer-events: none;
@@ -718,10 +765,58 @@ table.ds-table td.pos { color: var(--blue); }
   font-size: 12px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.45);
 }
-.trends-tooltip-period { font-weight: 700; margin-bottom: 6px; }
-.trends-tooltip-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.trends-tooltip-row:last-child { margin-bottom: 0; }
-.trends-tooltip-row.muted { opacity: 0.7; font-size: 11px; }
-.trends-key { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; }
-.trends-tooltip-label { color: var(--muted); flex: 1; }
-.trends-tooltip-value { font-weight: 700; }
+.tplus-tooltip-period { font-weight: 700; margin-bottom: 6px; }
+.tplus-tooltip-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.tplus-tooltip-row:last-child { margin-bottom: 0; }
+.tplus-tooltip-row.muted { opacity: 0.7; font-size: 11px; }
+.tplus-key { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+.tplus-tooltip-label { color: var(--muted); flex: 1; }
+.tplus-tooltip-value { font-weight: 700; }
+
+/* Headline stat cards -- summarize the same real per-period data the chart
+   and table below show, styled to match each series' color (blue/orange)
+   so identity carries over from the chart without relying on a legend. */
+.tplus-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.tplus-stat-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--stat-color, var(--accent));
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 0 16px -6px var(--stat-color, transparent);
+}
+.tplus-stat-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--stat-color, var(--accent));
+  margin-bottom: 6px;
+}
+.tplus-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+}
+.tplus-stat-value {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--stat-color, var(--text));
+  line-height: 1.1;
+}
+.tplus-stat-unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 1px;
+}
+.tplus-stat-sub {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+}

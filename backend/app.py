@@ -159,6 +159,37 @@ def glacier_temperature_trends():
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
 
 
+@app.get("/api/trends/pk")
+def glacier_temperature_trends_pakistan():
+    """Same as /api/trends, scoped to glaciers inside Pakistan and to the
+    Pakistan portion of the HKH boundary for the temperature series."""
+    try:
+        return trends.get_trends(country="PK")
+    except trends.TrendsUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
+
+
+@app.get("/api/mass-balance")
+def glacier_mass_balance_trends():
+    """Region-wide glacier mass-balance rate (Gt/yr, from summed volume
+    change converted via a standard ice-density assumption) vs. mean
+    temperature, same periods as /api/trends -- see trends.py."""
+    try:
+        return trends.get_mass_balance_trends()
+    except trends.TrendsUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
+
+
+@app.get("/api/mass-balance/pk")
+def glacier_mass_balance_trends_pakistan():
+    """Same as /api/mass-balance, scoped to glaciers inside Pakistan and to
+    the Pakistan portion of the HKH boundary for the temperature series."""
+    try:
+        return trends.get_mass_balance_trends(country="PK")
+    except trends.TrendsUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
+
+
 @app.get("/api/era5/range")
 def era5_range():
     """The earliest/latest months (YYYY-MM) actually available to query."""

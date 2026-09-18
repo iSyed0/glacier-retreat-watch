@@ -4,8 +4,55 @@ import MapView from './components/MapView'
 import Legend from './components/Legend'
 import DataSheet from './components/DataSheet'
 import BasemapSwitcher from './components/BasemapSwitcher'
-import TrendsPanel from './components/TrendsPanel'
+import TrendsPanelStats from './components/TrendsPanelStats'
+import ChartsPanel from './components/ChartsPanel'
 import { DEFAULT_MAP_STYLE_ID } from './mapStyles'
+
+// One entry per chart the floating Charts panel can open -- add a chart by
+// adding a row here; ChartsPanel's list and the modals below are both
+// driven off this array plus the single `charts` state map (see openChart).
+const CHART_DEFS = [
+  {
+    key: 'trendsHkh',
+    endpoint: '/api/trends',
+    variant: 'elevation',
+    rowTitle: 'Elevation change + temperature',
+    region: 'HKH region',
+    title: 'Glacier change vs. temperature',
+    sub: 'HKH region · 1999–2019 (historical record)',
+    scopeNote: 'every HKH glacier',
+  },
+  {
+    key: 'trendsPk',
+    endpoint: '/api/trends/pk',
+    variant: 'elevation',
+    rowTitle: 'Elevation change + temperature',
+    region: 'Pakistan',
+    title: 'Glacier change vs. temperature — Pakistan',
+    sub: 'Pakistan (HKH) · 1999–2019 (historical record)',
+    scopeNote: 'every glacier inside Pakistan',
+  },
+  {
+    key: 'massHkh',
+    endpoint: '/api/mass-balance',
+    variant: 'mass',
+    rowTitle: 'Mass balance + temperature',
+    region: 'HKH region',
+    title: 'Glacier mass balance vs. temperature',
+    sub: 'HKH region · 1999–2019 (historical record)',
+    scopeNote: 'every HKH glacier',
+  },
+  {
+    key: 'massPk',
+    endpoint: '/api/mass-balance/pk',
+    variant: 'mass',
+    rowTitle: 'Mass balance + temperature',
+    region: 'Pakistan',
+    title: 'Glacier mass balance vs. temperature — Pakistan',
+    sub: 'Pakistan (HKH) · 1999–2019 (historical record)',
+    scopeNote: 'every glacier inside Pakistan',
+  },
+]
 
 export default function App() {
   const [config, setConfig] = useState(null)
@@ -35,10 +82,9 @@ export default function App() {
   const [popRasterTile, setPopRasterTile] = useState(null) // { tileUrlTemplate }
   const [popRasterStatus, setPopRasterStatus] = useState('loading') // loading | ready | error
   const [popRasterError, setPopRasterError] = useState('')
-  const [trendsOpen, setTrendsOpen] = useState(false)
-  const [trendsData, setTrendsData] = useState(null)
-  const [trendsStatus, setTrendsStatus] = useState('idle') // idle | loading | ready | error
-  const [trendsError, setTrendsError] = useState('')
+  const [charts, setCharts] = useState(() =>
+    Object.fromEntries(CHART_DEFS.map((d) => [d.key, { open: false, data: null, status: 'idle', error: '' }]))
+  )
 
   useEffect(() => {
     fetch('/api/config')
@@ -129,14 +175,17 @@ export default function App() {
       })
   }, [era5Month])
 
-  // Fetch trend data the first time the panel is opened, not on mount --
-  // it's a handful of real Earth Engine + local-computation calls on the
-  // backend, worth deferring until someone actually asks to see it.
-  const openTrends = () => {
-    setTrendsOpen(true)
-    if (trendsStatus !== 'idle') return
-    setTrendsStatus('loading')
-    fetch('/api/trends')
+  // Fetch a chart's data the first time it's opened, not on mount -- these
+  // are real Earth Engine + local-computation calls on the backend, worth
+  // deferring until someone actually asks to see them. Each of the four
+  // charts (see CHART_DEFS) is its own backend endpoint, fetched once and
+  // cached in `charts[key]` for the life of the page.
+  const openChart = (key) => {
+    setCharts((prev) => ({ ...prev, [key]: { ...prev[key], open: true } }))
+    if (charts[key].status !== 'idle') return
+    const def = CHART_DEFS.find((d) => d.key === key)
+    setCharts((prev) => ({ ...prev, [key]: { ...prev[key], status: 'loading' } }))
+    fetch(def.endpoint)
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}))
@@ -145,14 +194,14 @@ export default function App() {
         return r.json()
       })
       .then((data) => {
-        setTrendsData(data)
-        setTrendsStatus('ready')
+        setCharts((prev) => ({ ...prev, [key]: { ...prev[key], data, status: 'ready' } }))
       })
       .catch((err) => {
-        setTrendsStatus('error')
-        setTrendsError(err.message)
+        setCharts((prev) => ({ ...prev, [key]: { ...prev[key], status: 'error', error: err.message } }))
       })
   }
+
+  const closeChart = (key) => setCharts((prev) => ({ ...prev, [key]: { ...prev[key], open: false } }))
 
   return (
     <div id="app">
@@ -165,15 +214,7 @@ export default function App() {
           )}
         </div>
         <div id="title">HKH Glacial Retreat Current</div>
-        <div id="spacer">
-          <button type="button" className="topbar-trends-btn" onClick={openTrends}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 17 9 11 13 15 21 6" />
-              <polyline points="15 6 21 6 21 12" />
-            </svg>
-            Trends
-          </button>
-        </div>
+        <div id="spacer" />
       </div>
 
       {config && (
@@ -242,13 +283,31 @@ export default function App() {
         />
       </div>
 
-      <TrendsPanel
-        open={trendsOpen}
-        onClose={() => setTrendsOpen(false)}
-        data={trendsData}
-        status={trendsStatus}
-        error={trendsError}
+      <ChartsPanel
+        charts={CHART_DEFS.map((d) => ({
+          key: d.key,
+          variant: d.variant,
+          title: d.rowTitle,
+          region: d.region,
+          status: charts[d.key].status,
+          onClick: () => openChart(d.key),
+        }))}
       />
+
+      {CHART_DEFS.map((d) => (
+        <TrendsPanelStats
+          key={d.key}
+          open={charts[d.key].open}
+          onClose={() => closeChart(d.key)}
+          data={charts[d.key].data}
+          status={charts[d.key].status}
+          error={charts[d.key].error}
+          title={d.title}
+          sub={d.sub}
+          scopeNote={d.scopeNote}
+          variant={d.variant}
+        />
+      ))}
     </div>
   )
 }
