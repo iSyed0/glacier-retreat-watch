@@ -10,8 +10,8 @@ import os
 from functools import lru_cache
 
 import requests
-
-TILESERVER_URL = os.environ.get("BUILDINGS_TILESERVER_URL", "http://172.18.1.139:8081")
+#139 153
+TILESERVER_URL = os.environ.get("BUILDINGS_TILESERVER_URL", "http://172.18.1.153:8081")
 
 
 class BuildingsUnavailable(RuntimeError):
