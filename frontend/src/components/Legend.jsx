@@ -16,7 +16,7 @@ function LayerRow({ swatch, label, checked, onChange, indent, disabled }) {
     <div className={`layer-row${indent ? ' indent' : ''}${disabled ? ' disabled' : ''}`}>
       <span className="layer-row-main">
         {swatch}
-        <span className="layer-row-label">{label}</span>
+        <span className="layer-row-label" title={label}>{label}</span>
       </span>
       <Toggle checked={checked} onChange={onChange} label={label} disabled={disabled} />
     </div>

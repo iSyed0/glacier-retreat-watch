@@ -28,16 +28,28 @@ export const SENSOR_LAYERS = [
 
 // Properties come from hand-maintained field survey sheets, so keys vary
 // network to network (StationNam vs. VillageNam vs. "Station Na", etc.) --
-// rather than mapping each one, just render whatever's present.
-function buildSensorPopupHtml(properties) {
-  const rows = Object.entries(properties)
-    .filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '')
-    .map(([k, v]) => `<div class="sensor-popup-row"><span class="k">${k}</span><span class="v">${v}</span></div>`)
-    .join('')
-  return `<div class="sensor-popup">${rows}</div>`
+// rather than mapping each one, just render whatever's present. The header
+// bar is tinted with the layer's own color (--sensor-color, read by
+// App.css) so a popup is visually traceable back to its legend entry.
+function escapeHtml(v) {
+  return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
 
-function addSensorLayer(map, { key, url, color }, beforeId) {
+function buildSensorPopupHtml({ label, color }, properties) {
+  const rows = Object.entries(properties)
+    .filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '')
+    .map(([k, v]) => `<div class="sensor-popup-row"><span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(v)}</span></div>`)
+    .join('')
+  return `
+    <div class="sensor-popup" style="--sensor-color: ${color}">
+      <div class="sensor-popup-header">${escapeHtml(label)}</div>
+      <div class="sensor-popup-rows">${rows}</div>
+    </div>
+  `
+}
+
+function addSensorLayer(map, layer, beforeId) {
+  const { key, url, color } = layer
   const layerId = `sensor-${key}`
   if (map.getLayer(layerId)) return
   map.addSource(layerId, { type: 'geojson', data: url })
@@ -58,9 +70,9 @@ function addSensorLayer(map, { key, url, color }, beforeId) {
   map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = '' })
   map.on('click', layerId, (e) => {
     const f = e.features[0]
-    new mapboxgl.Popup({ closeButton: true, maxWidth: '280px' })
+    new mapboxgl.Popup({ closeButton: true, maxWidth: '280px', className: 'sensor-popup-wrap' })
       .setLngLat(f.geometry.coordinates)
-      .setHTML(buildSensorPopupHtml(f.properties))
+      .setHTML(buildSensorPopupHtml(layer, f.properties))
       .addTo(map)
   })
 }

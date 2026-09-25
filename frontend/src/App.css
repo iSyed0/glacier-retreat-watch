@@ -385,27 +385,51 @@
 }
 .layer-row.disabled { opacity: 0.45; }
 
-/* Popup for sensor / monitoring-station point layers -- overrides Mapbox
-   GL's default white popup to match the app's dark panel theme. */
-.mapboxgl-popup-content {
-  background: var(--panel-bg);
-  color: var(--text);
+/* Popup for sensor / monitoring-station point layers -- scoped to the
+   sensor-popup-wrap className (set on the Popup instance in MapView) and
+   backed with !important so it reliably beats mapbox-gl.css's own
+   .mapboxgl-popup-content rule regardless of which stylesheet the bundler
+   places last. Raised "card" look (layered shadow + inset highlight)
+   rather than Mapbox's flat default, to read clearly against satellite
+   imagery. */
+.sensor-popup-wrap .mapboxgl-popup-content {
+  background: linear-gradient(180deg, #1a2430, #0e151c) !important;
+  color: var(--text) !important;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  padding: 10px 12px;
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 3px 8px rgba(0,0,0,0.45),
+    0 14px 32px rgba(0,0,0,0.55);
+  padding: 0;
+  overflow: hidden;
 }
-.mapboxgl-popup-close-button { color: var(--muted); font-size: 16px; }
-.mapboxgl-popup-close-button:hover { color: var(--text); background: transparent; }
-.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip { border-top-color: var(--panel-bg); }
-.mapboxgl-popup-anchor-top .mapboxgl-popup-tip { border-bottom-color: var(--panel-bg); }
-.mapboxgl-popup-anchor-left .mapboxgl-popup-tip { border-right-color: var(--panel-bg); }
-.mapboxgl-popup-anchor-right .mapboxgl-popup-tip { border-left-color: var(--panel-bg); }
-.sensor-popup { font-size: 12.5px; max-height: 220px; overflow-y: auto; }
-.sensor-popup-row { display: flex; gap: 8px; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid var(--border); }
+.sensor-popup-wrap .mapboxgl-popup-close-button {
+  color: rgba(234,241,247,0.75) !important;
+  font-size: 18px;
+  top: 2px;
+  right: 4px;
+}
+.sensor-popup-wrap .mapboxgl-popup-close-button:hover { color: var(--text) !important; background: transparent !important; }
+.sensor-popup-wrap.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip { border-top-color: #0e151c !important; }
+.sensor-popup-wrap.mapboxgl-popup-anchor-top .mapboxgl-popup-tip { border-bottom-color: #1a2430 !important; }
+.sensor-popup-wrap.mapboxgl-popup-anchor-left .mapboxgl-popup-tip { border-right-color: #1a2430 !important; }
+.sensor-popup-wrap.mapboxgl-popup-anchor-right .mapboxgl-popup-tip { border-left-color: #1a2430 !important; }
+
+.sensor-popup { font-size: 13px; }
+.sensor-popup-header {
+  padding: 9px 30px 9px 13px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0b0f14;
+  background: var(--sensor-color, var(--accent));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.15);
+}
+.sensor-popup-rows { padding: 9px 13px 11px; max-height: 220px; overflow-y: auto; }
+.sensor-popup-row { display: flex; gap: 10px; justify-content: space-between; padding: 3.5px 0; border-bottom: 1px solid rgba(255,255,255,0.07); }
 .sensor-popup-row:last-child { border-bottom: none; }
-.sensor-popup-row .k { color: var(--muted); flex-shrink: 0; }
-.sensor-popup-row .v { color: var(--text); text-align: right; word-break: break-word; }
+.sensor-popup-row .k { color: var(--muted); font-weight: 600; flex-shrink: 0; }
+.sensor-popup-row .v { color: var(--text); font-weight: 600; text-align: right; word-break: break-word; }
 
 .building-tiers { margin-top: 2px; }
 .building-tiers .legend-row {
