@@ -19,11 +19,11 @@ const PK_LEVELS = [
 // buildSensorPopupHtml below, which just renders whatever keys are present
 // rather than assuming a shared shape across networks).
 export const SENSOR_LAYERS = [
-  { key: 'glof2', url: '/api/sensors/glof2', label: 'GLOF-II network stations', color: '#38bdf8' },
-  { key: 'glof2Damaged', url: '/api/sensors/glof2-damaged', label: 'Damaged / stolen stations', color: '#ff3b30' },
-  { key: 'briFf', url: '/api/sensors/bri-ff', label: 'BRI flash-flood stations', color: '#fb923c' },
-  { key: 'focus2026', url: '/api/sensors/focus2026', label: '2026 focus villages (hazard)', color: '#c264ff' },
-  { key: 'gmrcWapda', url: '/api/sensors/gmrc-wapda', label: 'GM-RC / WAPDA stations', color: '#fbbf24' },
+  { key: 'glof2', url: '/api/sensors/glof2', label: 'GLOF-II network stations', color: '#00d6ff' },
+  { key: 'glof2Damaged', url: '/api/sensors/glof2-damaged', label: 'Damaged / stolen stations', color: '#ff1744' },
+  { key: 'briFf', url: '/api/sensors/bri-ff', label: 'BRI flash-flood stations', color: '#ff7a00' },
+  { key: 'focus2026', url: '/api/sensors/focus2026', label: '2026 focus villages (hazard)', color: '#e100ff' },
+  { key: 'gmrcWapda', url: '/api/sensors/gmrc-wapda', label: 'GM-RC / WAPDA stations', color: '#ffe600' },
 ]
 
 // Properties come from hand-maintained field survey sheets, so keys vary
@@ -59,9 +59,9 @@ function addSensorLayer(map, layer, beforeId) {
     type: 'circle',
     source: layerId,
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 3, 10, 6, 14, 9],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 4, 10, 8, 14, 12],
       'circle-color': color,
-      'circle-opacity': 0.9,
+      'circle-opacity': 0.95,
       'circle-stroke-color': '#0b0f14',
       'circle-stroke-width': 1.5,
     },
@@ -77,7 +77,7 @@ function addSensorLayer(map, layer, beforeId) {
     type: 'circle',
     source: layerId,
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.2, 10, 2.4, 14, 3.6],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.6, 10, 3.2, 14, 4.8],
       'circle-color': '#ffffff',
       'circle-opacity': 0.95,
     },

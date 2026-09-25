@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { BUILDINGS_MIN_ZOOM, BUILDINGS_HEIGHT_TIERS } from './MapView'
+import { BUILDINGS_MIN_ZOOM, BUILDINGS_HEIGHT_TIERS, SENSOR_LAYERS } from './MapView'
 
 function Toggle({ checked, onChange, label, disabled }) {
   return (
@@ -170,6 +170,7 @@ export default function Legend({
 
   const lineSwatch = (color) => <span className="swatch line" style={{ background: color }} />
   const dotSwatch = (color) => <span className="swatch dot-color" style={{ background: color + '33', borderColor: color }} />
+  const sensorColor = Object.fromEntries(SENSOR_LAYERS.map((l) => [l.key, l.color]))
 
   return (
     <div id="legend" className={collapsed ? 'collapsed' : ''} ref={panelRef} style={panelStyle}>
@@ -245,11 +246,11 @@ export default function Legend({
               </button>
               {sensorsOpen && (
                 <div className="legend-group-body">
-                  <LayerRow indent swatch={dotSwatch('#38bdf8')} label="GLOF-II network stations" checked={sensorsGlof2Visible} onChange={onToggleSensorsGlof2} />
-                  <LayerRow indent swatch={dotSwatch('#ff3b30')} label="Damaged / stolen stations" checked={sensorsGlof2DamagedVisible} onChange={onToggleSensorsGlof2Damaged} />
-                  <LayerRow indent swatch={dotSwatch('#fb923c')} label="BRI flash-flood stations" checked={sensorsBriFfVisible} onChange={onToggleSensorsBriFf} />
-                  <LayerRow indent swatch={dotSwatch('#c264ff')} label="2026 focus villages (hazard)" checked={sensorsFocus2026Visible} onChange={onToggleSensorsFocus2026} />
-                  <LayerRow indent swatch={dotSwatch('#fbbf24')} label="GM-RC / WAPDA stations" checked={sensorsGmrcWapdaVisible} onChange={onToggleSensorsGmrcWapda} />
+                  <LayerRow indent swatch={dotSwatch(sensorColor.glof2)} label="GLOF-II network stations" checked={sensorsGlof2Visible} onChange={onToggleSensorsGlof2} />
+                  <LayerRow indent swatch={dotSwatch(sensorColor.glof2Damaged)} label="Damaged / stolen stations" checked={sensorsGlof2DamagedVisible} onChange={onToggleSensorsGlof2Damaged} />
+                  <LayerRow indent swatch={dotSwatch(sensorColor.briFf)} label="BRI flash-flood stations" checked={sensorsBriFfVisible} onChange={onToggleSensorsBriFf} />
+                  <LayerRow indent swatch={dotSwatch(sensorColor.focus2026)} label="2026 focus villages (hazard)" checked={sensorsFocus2026Visible} onChange={onToggleSensorsFocus2026} />
+                  <LayerRow indent swatch={dotSwatch(sensorColor.gmrcWapda)} label="GM-RC / WAPDA stations" checked={sensorsGmrcWapdaVisible} onChange={onToggleSensorsGmrcWapda} />
                 </div>
               )}
             </div>
