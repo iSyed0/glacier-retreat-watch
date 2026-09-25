@@ -51,6 +51,7 @@ function buildSensorPopupHtml({ label, color }, properties) {
 function addSensorLayer(map, layer, beforeId) {
   const { key, url, color } = layer
   const layerId = `sensor-${key}`
+  const centerLayerId = `${layerId}-center`
   if (map.getLayer(layerId)) return
   map.addSource(layerId, { type: 'geojson', data: url })
   map.addLayer({
@@ -63,6 +64,22 @@ function addSensorLayer(map, layer, beforeId) {
       'circle-opacity': 0.9,
       'circle-stroke-color': '#0b0f14',
       'circle-stroke-width': 1.5,
+    },
+  }, beforeId)
+
+  // Purely decorative white center dot on top of each colored marker --
+  // shares the same source/geometry, just a smaller circle drawn above it.
+  // Click/hover handlers stay on the colored layer below (layerId), not
+  // this one -- Mapbox resolves those per-layer at the click point
+  // regardless of render order, so the dot doesn't need its own handlers.
+  map.addLayer({
+    id: centerLayerId,
+    type: 'circle',
+    source: layerId,
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.2, 10, 2.4, 14, 3.6],
+      'circle-color': '#ffffff',
+      'circle-opacity': 0.95,
     },
   }, beforeId)
 
@@ -785,7 +802,9 @@ export default function MapView({
 
       const apply = () => {
         if (map.getLayer(layerId)) {
-          map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none')
+          const visibility = visible ? 'visible' : 'none'
+          map.setLayoutProperty(layerId, 'visibility', visibility)
+          map.setLayoutProperty(`${layerId}-center`, 'visibility', visibility)
           return
         }
         if (!visible) return // nothing to hide -- don't fetch until asked
