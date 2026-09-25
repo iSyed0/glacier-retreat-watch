@@ -88,6 +88,16 @@ export default function Legend({
   onPopRasterOpacityChange,
   popRasterStatus,
   popRasterError,
+  sensorsGlof2Visible,
+  onToggleSensorsGlof2,
+  sensorsGlof2DamagedVisible,
+  onToggleSensorsGlof2Damaged,
+  sensorsBriFfVisible,
+  onToggleSensorsBriFf,
+  sensorsFocus2026Visible,
+  onToggleSensorsFocus2026,
+  sensorsGmrcWapdaVisible,
+  onToggleSensorsGmrcWapda,
 }) {
   const gradient = era5 ? `linear-gradient(to right, ${era5.palette.map((c) => '#' + c).join(',')})` : ''
   const popRasterGradient = popRaster ? `linear-gradient(to right, ${popRaster.palette.map((c) => '#' + c).join(',')})` : ''
@@ -105,6 +115,8 @@ export default function Legend({
   })
   const pkAnyVisible = pkNationalVisible || pkProvincesVisible || pkDistrictsVisible
   const [pkOpen, setPkOpen] = useState(pkAnyVisible)
+  const sensorsAnyVisible = sensorsGlof2Visible || sensorsGlof2DamagedVisible || sensorsBriFfVisible || sensorsFocus2026Visible || sensorsGmrcWapdaVisible
+  const [sensorsOpen, setSensorsOpen] = useState(sensorsAnyVisible)
 
   const setCollapsedPersist = (next) => {
     setCollapsed(next)
@@ -157,6 +169,7 @@ export default function Legend({
       : era5Date || era5Month
 
   const lineSwatch = (color) => <span className="swatch line" style={{ background: color }} />
+  const dotSwatch = (color) => <span className="swatch dot-color" style={{ background: color + '33', borderColor: color }} />
 
   return (
     <div id="legend" className={collapsed ? 'collapsed' : ''} ref={panelRef} style={panelStyle}>
@@ -221,6 +234,22 @@ export default function Legend({
                   <LayerRow indent swatch={lineSwatch('#ff8a00')} label="National" checked={pkNationalVisible} onChange={onTogglePkNational} />
                   <LayerRow indent swatch={lineSwatch('#c264ff')} label="Provinces" checked={pkProvincesVisible} onChange={onTogglePkProvinces} />
                   <LayerRow indent swatch={lineSwatch('#8ea3b6')} label="Districts" checked={pkDistrictsVisible} onChange={onTogglePkDistricts} />
+                </div>
+              )}
+            </div>
+
+            <div className="legend-group">
+              <button type="button" className="legend-group-toggle" onClick={() => setSensorsOpen((o) => !o)}>
+                <Chevron open={sensorsOpen} mini />
+                <span>Sensors &amp; monitoring stations</span>
+              </button>
+              {sensorsOpen && (
+                <div className="legend-group-body">
+                  <LayerRow indent swatch={dotSwatch('#38bdf8')} label="GLOF-II network stations" checked={sensorsGlof2Visible} onChange={onToggleSensorsGlof2} />
+                  <LayerRow indent swatch={dotSwatch('#ff3b30')} label="Damaged / stolen stations" checked={sensorsGlof2DamagedVisible} onChange={onToggleSensorsGlof2Damaged} />
+                  <LayerRow indent swatch={dotSwatch('#fb923c')} label="BRI flash-flood stations" checked={sensorsBriFfVisible} onChange={onToggleSensorsBriFf} />
+                  <LayerRow indent swatch={dotSwatch('#c264ff')} label="2026 focus villages (hazard)" checked={sensorsFocus2026Visible} onChange={onToggleSensorsFocus2026} />
+                  <LayerRow indent swatch={dotSwatch('#fbbf24')} label="GM-RC / WAPDA stations" checked={sensorsGmrcWapdaVisible} onChange={onToggleSensorsGmrcWapda} />
                 </div>
               )}
             </div>

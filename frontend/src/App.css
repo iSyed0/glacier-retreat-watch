@@ -377,7 +377,35 @@
   background: rgba(45,212,191,0.25);
   border: 1.5px solid #2dd4bf;
 }
+.layer-row .swatch.dot-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid;
+}
 .layer-row.disabled { opacity: 0.45; }
+
+/* Popup for sensor / monitoring-station point layers -- overrides Mapbox
+   GL's default white popup to match the app's dark panel theme. */
+.mapboxgl-popup-content {
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  padding: 10px 12px;
+}
+.mapboxgl-popup-close-button { color: var(--muted); font-size: 16px; }
+.mapboxgl-popup-close-button:hover { color: var(--text); background: transparent; }
+.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip { border-top-color: var(--panel-bg); }
+.mapboxgl-popup-anchor-top .mapboxgl-popup-tip { border-bottom-color: var(--panel-bg); }
+.mapboxgl-popup-anchor-left .mapboxgl-popup-tip { border-right-color: var(--panel-bg); }
+.mapboxgl-popup-anchor-right .mapboxgl-popup-tip { border-left-color: var(--panel-bg); }
+.sensor-popup { font-size: 12.5px; max-height: 220px; overflow-y: auto; }
+.sensor-popup-row { display: flex; gap: 8px; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid var(--border); }
+.sensor-popup-row:last-child { border-bottom: none; }
+.sensor-popup-row .k { color: var(--muted); flex-shrink: 0; }
+.sensor-popup-row .v { color: var(--text); text-align: right; word-break: break-word; }
 
 .building-tiers { margin-top: 2px; }
 .building-tiers .legend-row {

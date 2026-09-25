@@ -1,0 +1,27 @@
+{
+"type": "FeatureCollection",
+"name": "gmrcwapda",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Zani Pass" }, "geometry": { "type": "Point", "coordinates": [ 72.169826589318973, 36.351967777641846 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Koht Pass" }, "geometry": { "type": "Point", "coordinates": [ 72.577071340466816, 36.582983698045382 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Yasin" }, "geometry": { "type": "Point", "coordinates": [ 73.300427486239229, 36.451637450523563 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Shandure" }, "geometry": { "type": "Point", "coordinates": [ 72.550421377201531, 36.086152240028021 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Kelash" }, "geometry": { "type": "Point", "coordinates": [ 71.661454745423342, 35.690209928657872 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Shangta" }, "geometry": { "type": "Point", "coordinates": [ 72.620813765290677, 34.381744321551786 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Pir Chenasi" }, "geometry": { "type": "Point", "coordinates": [ 73.565697730705907, 34.379999383480843 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Shogran" }, "geometry": { "type": "Point", "coordinates": [ 73.477657673490185, 34.597720065514316 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Rama" }, "geometry": { "type": "Point", "coordinates": [ 74.814914758766832, 35.355280963245541 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Rattu" }, "geometry": { "type": "Point", "coordinates": [ 74.805396914743511, 35.141129472720813 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Burzil" }, "geometry": { "type": "Point", "coordinates": [ 75.093311696448978, 34.897314034990067 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Deosai" }, "geometry": { "type": "Point", "coordinates": [ 75.542754205651079, 35.077167577999944 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Shigar" }, "geometry": { "type": "Point", "coordinates": [ 75.541485159781303, 35.62536366759651 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Hushey" }, "geometry": { "type": "Point", "coordinates": [ 76.365730452200964, 35.418191929355551 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Dainyour" }, "geometry": { "type": "Point", "coordinates": [ 74.37293185981801, 35.921447932088689 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Naltar" }, "geometry": { "type": "Point", "coordinates": [ 74.182812925452154, 36.160583763174657 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Ushkora" }, "geometry": { "type": "Point", "coordinates": [ 73.392831871516464, 36.039707144078463 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Ziarat" }, "geometry": { "type": "Point", "coordinates": [ 74.482878821360771, 36.774532291899021 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Khunjrab" }, "geometry": { "type": "Point", "coordinates": [ 75.396841691005264, 36.848295583079768 ] } },
+{ "type": "Feature", "properties": { "Id": 0, "Name": "Saif ul Maluk" }, "geometry": { "type": "Point", "coordinates": [ 73.713888579264648, 34.867890016768648 ] } }
+]
+}

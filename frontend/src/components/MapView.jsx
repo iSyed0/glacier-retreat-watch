@@ -14,6 +14,57 @@ const PK_LEVELS = [
   { key: 'districts', url: '/api/boundaries/pakistan/districts', color: '#8ea3b6', lineWidth: 0.75, fillOpacity: 0 },
 ]
 
+// Field sensor / monitoring-station networks (backend/app.py SENSOR_FILES)
+// -- static GeoJSON point layers, each with its own property schema (see
+// buildSensorPopupHtml below, which just renders whatever keys are present
+// rather than assuming a shared shape across networks).
+export const SENSOR_LAYERS = [
+  { key: 'glof2', url: '/api/sensors/glof2', label: 'GLOF-II network stations', color: '#38bdf8' },
+  { key: 'glof2Damaged', url: '/api/sensors/glof2-damaged', label: 'Damaged / stolen stations', color: '#ff3b30' },
+  { key: 'briFf', url: '/api/sensors/bri-ff', label: 'BRI flash-flood stations', color: '#fb923c' },
+  { key: 'focus2026', url: '/api/sensors/focus2026', label: '2026 focus villages (hazard)', color: '#c264ff' },
+  { key: 'gmrcWapda', url: '/api/sensors/gmrc-wapda', label: 'GM-RC / WAPDA stations', color: '#fbbf24' },
+]
+
+// Properties come from hand-maintained field survey sheets, so keys vary
+// network to network (StationNam vs. VillageNam vs. "Station Na", etc.) --
+// rather than mapping each one, just render whatever's present.
+function buildSensorPopupHtml(properties) {
+  const rows = Object.entries(properties)
+    .filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '')
+    .map(([k, v]) => `<div class="sensor-popup-row"><span class="k">${k}</span><span class="v">${v}</span></div>`)
+    .join('')
+  return `<div class="sensor-popup">${rows}</div>`
+}
+
+function addSensorLayer(map, { key, url, color }, beforeId) {
+  const layerId = `sensor-${key}`
+  if (map.getLayer(layerId)) return
+  map.addSource(layerId, { type: 'geojson', data: url })
+  map.addLayer({
+    id: layerId,
+    type: 'circle',
+    source: layerId,
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 3, 10, 6, 14, 9],
+      'circle-color': color,
+      'circle-opacity': 0.9,
+      'circle-stroke-color': '#0b0f14',
+      'circle-stroke-width': 1.5,
+    },
+  }, beforeId)
+
+  map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer' })
+  map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = '' })
+  map.on('click', layerId, (e) => {
+    const f = e.features[0]
+    new mapboxgl.Popup({ closeButton: true, maxWidth: '280px' })
+      .setLngLat(f.geometry.coordinates)
+      .setHTML(buildSensorPopupHtml(f.properties))
+      .addTo(map)
+  })
+}
+
 // Building footprints -- one vector tileset per Pakistani district on an
 // internal TileServer GL instance (see backend/buildings.py). Footprints
 // are meaningless zoomed out, so the layer itself only renders past
@@ -133,8 +184,20 @@ export default function MapView({
   popRasterVisible,
   popRasterOpacity,
   popRasterTileUrl,
+  sensorsGlof2Visible,
+  sensorsGlof2DamagedVisible,
+  sensorsBriFfVisible,
+  sensorsFocus2026Visible,
+  sensorsGmrcWapdaVisible,
 }) {
   const pkVisible = { national: pkNationalVisible, provinces: pkProvincesVisible, districts: pkDistrictsVisible }
+  const sensorsVisible = {
+    glof2: sensorsGlof2Visible,
+    glof2Damaged: sensorsGlof2DamagedVisible,
+    briFf: sensorsBriFfVisible,
+    focus2026: sensorsFocus2026Visible,
+    gmrcWapda: sensorsGmrcWapdaVisible,
+  }
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const isFirstStyleRef = useRef(true)
@@ -148,7 +211,7 @@ export default function MapView({
   // after the mount effect's closure was created -- always sees the current
   // toggle state instead of whatever was true when the map was first built.
   const stateRef = useRef({})
-  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity }
+  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible }
 
   // One-time map setup.
   useEffect(() => {
@@ -218,7 +281,7 @@ export default function MapView({
     // markers, boundaries, and ERA5 overlay survive a basemap switch.
     function addOverlayLayers() {
       if (map.getSource('hkh-boundary')) return // already (re)built for this style
-      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity } = stateRef.current
+      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible } = stateRef.current
 
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
@@ -402,6 +465,11 @@ export default function MapView({
           addBuildingLayer(map, buildingsIndex.tileServer, id, bounds, 'cluster-dots')
         })
       }
+
+      SENSOR_LAYERS.forEach((layer) => {
+        if (!sensorsVisible[layer.key]) return // not toggled on -- don't fetch until asked
+        addSensorLayer(map, layer, 'cluster-dots')
+      })
     }
 
     map.on('style.load', () => {
@@ -690,6 +758,37 @@ export default function MapView({
       map.once('load', apply)
     }
   }, [buildingsVisible, buildingsIndex])
+
+  // Sensor / monitoring-station networks -- same lazy toggle pattern as the
+  // Pakistan boundaries and buildings above: each source+layer is created
+  // the first time its toggle is switched on, and just has its visibility
+  // flipped after that.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    SENSOR_LAYERS.forEach((layer) => {
+      const visible = sensorsVisible[layer.key]
+      const layerId = `sensor-${layer.key}`
+
+      const apply = () => {
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(layerId, 'visibility', visible ? 'visible' : 'none')
+          return
+        }
+        if (!visible) return // nothing to hide -- don't fetch until asked
+        const beforeId = map.getLayer('cluster-dots') ? 'cluster-dots' : undefined
+        addSensorLayer(map, layer, beforeId)
+      }
+
+      if (map.isStyleLoaded()) {
+        apply()
+      } else {
+        map.once('load', apply)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sensorsGlof2Visible, sensorsGlof2DamagedVisible, sensorsBriFfVisible, sensorsFocus2026Visible, sensorsGmrcWapdaVisible])
 
   return <div id="map" ref={containerRef} />
 }

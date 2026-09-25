@@ -82,6 +82,11 @@ export default function App() {
   const [popRasterTile, setPopRasterTile] = useState(null) // { tileUrlTemplate }
   const [popRasterStatus, setPopRasterStatus] = useState('loading') // loading | ready | error
   const [popRasterError, setPopRasterError] = useState('')
+  const [sensorsGlof2Visible, setSensorsGlof2Visible] = useState(false)
+  const [sensorsGlof2DamagedVisible, setSensorsGlof2DamagedVisible] = useState(false)
+  const [sensorsBriFfVisible, setSensorsBriFfVisible] = useState(false)
+  const [sensorsFocus2026Visible, setSensorsFocus2026Visible] = useState(false)
+  const [sensorsGmrcWapdaVisible, setSensorsGmrcWapdaVisible] = useState(false)
   const [charts, setCharts] = useState(() =>
     Object.fromEntries(CHART_DEFS.map((d) => [d.key, { open: false, data: null, status: 'idle', error: '' }]))
   )
@@ -236,6 +241,11 @@ export default function App() {
           popRasterVisible={popRasterVisible}
           popRasterOpacity={popRasterOpacity}
           popRasterTileUrl={popRasterTile?.tileUrlTemplate || null}
+          sensorsGlof2Visible={sensorsGlof2Visible}
+          sensorsGlof2DamagedVisible={sensorsGlof2DamagedVisible}
+          sensorsBriFfVisible={sensorsBriFfVisible}
+          sensorsFocus2026Visible={sensorsFocus2026Visible}
+          sensorsGmrcWapdaVisible={sensorsGmrcWapdaVisible}
         />
       )}
 
@@ -275,6 +285,16 @@ export default function App() {
           onPopRasterOpacityChange={setPopRasterOpacity}
           popRasterStatus={popRasterStatus}
           popRasterError={popRasterError}
+          sensorsGlof2Visible={sensorsGlof2Visible}
+          onToggleSensorsGlof2={setSensorsGlof2Visible}
+          sensorsGlof2DamagedVisible={sensorsGlof2DamagedVisible}
+          onToggleSensorsGlof2Damaged={setSensorsGlof2DamagedVisible}
+          sensorsBriFfVisible={sensorsBriFfVisible}
+          onToggleSensorsBriFf={setSensorsBriFfVisible}
+          sensorsFocus2026Visible={sensorsFocus2026Visible}
+          onToggleSensorsFocus2026={setSensorsFocus2026Visible}
+          sensorsGmrcWapdaVisible={sensorsGmrcWapdaVisible}
+          onToggleSensorsGmrcWapda={setSensorsGmrcWapdaVisible}
         />
         <DataSheet
           feature={selectedFeature}

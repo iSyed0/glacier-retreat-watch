@@ -36,6 +36,18 @@ PK_BOUNDARY_FILES = {
     "districts": PK_BOUNDARIES_DIR / "Pakistan_Districts.simplified.geojson",
 }
 
+# Field sensor / monitoring-station networks (static point layers, no EE
+# involved) -- each file has its own property schema, so the frontend reads
+# whatever keys are present rather than this backend normalizing them.
+SENSORS_DIR = BASE_DIR.parent / "sensors"
+SENSOR_FILES = {
+    "glof2": SENSORS_DIR / "glof2.geojson",
+    "glof2-damaged": SENSORS_DIR / "glof2damagedstations.geojson",
+    "bri-ff": SENSORS_DIR / "bri_ff.geojson",
+    "focus2026": SENSORS_DIR / "focus2026.geojson",
+    "gmrc-wapda": SENSORS_DIR / "gmrcwapda.geojson",
+}
+
 # Country codes referenced in the glacier dataset.
 COUNTRY_NAMES = {
     "AF": "Afghanistan",
@@ -122,6 +134,18 @@ def pakistan_boundary(level: str):
         raise HTTPException(status_code=404, detail=f"Unknown boundary level: {level}")
     if not path.exists():
         raise HTTPException(status_code=503, detail=f"Boundary file not available: {path.name}")
+    return FileResponse(path, media_type="application/geo+json")
+
+
+@app.get("/api/sensors/{key}")
+def sensor_layer(key: str):
+    """One field sensor/monitoring-station network as GeoJSON points --
+    key is one of SENSOR_FILES (see above)."""
+    path = SENSOR_FILES.get(key)
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"Unknown sensor layer: {key}")
+    if not path.exists():
+        raise HTTPException(status_code=503, detail=f"Sensor file not available: {path.name}")
     return FileResponse(path, media_type="application/geo+json")
 
 
