@@ -68,6 +68,14 @@ export default function App() {
   const [era5Tile, setEra5Tile] = useState(null) // { tileUrlTemplate, date }
   const [era5Status, setEra5Status] = useState('idle') // idle | loading | ready | error
   const [era5Error, setEra5Error] = useState('')
+  const [era5AnnualVisible, setEra5AnnualVisible] = useState(false)
+  const [era5AnnualOpacity, setEra5AnnualOpacity] = useState(0.65)
+  const [era5AnnualRange, setEra5AnnualRange] = useState(null) // { min: 1999, max: 2026 }
+  const [era5AnnualYear, setEra5AnnualYear] = useState(null) // the year the user has selected
+  const [era5AnnualTile, setEra5AnnualTile] = useState(null) // { tileUrlTemplate, year, meanTempC }
+  const [era5AnnualStatus, setEra5AnnualStatus] = useState('idle') // idle | loading | ready | error
+  const [era5AnnualError, setEra5AnnualError] = useState('')
+  const [era5AnnualPlaying, setEra5AnnualPlaying] = useState(false)
   const [boundaryVisible, setBoundaryVisible] = useState(true)
   const [pkNationalVisible, setPkNationalVisible] = useState(false)
   const [pkProvincesVisible, setPkProvincesVisible] = useState(false)
@@ -87,6 +95,7 @@ export default function App() {
   const [sensorsBriFfVisible, setSensorsBriFfVisible] = useState(false)
   const [sensorsFocus2026Visible, setSensorsFocus2026Visible] = useState(false)
   const [sensorsGmrcWapdaVisible, setSensorsGmrcWapdaVisible] = useState(false)
+  const [riversVisible, setRiversVisible] = useState(false)
   const [charts, setCharts] = useState(() =>
     Object.fromEntries(CHART_DEFS.map((d) => [d.key, { open: false, data: null, status: 'idle', error: '' }]))
   )
@@ -180,6 +189,63 @@ export default function App() {
       })
   }, [era5Month])
 
+  // Find out which years the annual layer covers, then default to the
+  // earliest (matching the GEE script this layer was ported from, which
+  // opens on 1999 rather than the most recent year).
+  useEffect(() => {
+    fetch('/api/era5-annual/range')
+      .then((r) => {
+        if (!r.ok) throw new Error(`range request failed (${r.status})`)
+        return r.json()
+      })
+      .then((range) => {
+        setEra5AnnualRange(range)
+        setEra5AnnualYear(range.min)
+      })
+      .catch((err) => setEra5AnnualError(err.message))
+  }, [])
+
+  // Fetch a fresh tile whenever the selected year changes.
+  useEffect(() => {
+    if (era5AnnualYear == null) return
+    setEra5AnnualStatus('loading')
+    setEra5AnnualError('')
+    fetch(`/api/era5-annual/tile?year=${era5AnnualYear}`)
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}))
+          throw new Error(body.detail || `request failed (${r.status})`)
+        }
+        return r.json()
+      })
+      .then((tile) => {
+        setEra5AnnualTile(tile)
+        setEra5AnnualStatus('ready')
+      })
+      .catch((err) => {
+        setEra5AnnualStatus('error')
+        setEra5AnnualError(err.message)
+      })
+  }, [era5AnnualYear])
+
+  // Play/pause: advance one year at a time on a fixed interval (matching
+  // the 1200ms cadence of the GEE script this was ported from), stopping
+  // automatically at the last year rather than looping.
+  useEffect(() => {
+    if (!era5AnnualPlaying || !era5AnnualRange) return
+    const id = setInterval(() => {
+      setEra5AnnualYear((y) => {
+        const next = y + 1
+        if (next > era5AnnualRange.max) {
+          setEra5AnnualPlaying(false)
+          return y
+        }
+        return next
+      })
+    }, 1200)
+    return () => clearInterval(id)
+  }, [era5AnnualPlaying, era5AnnualRange])
+
   // Fetch a chart's data the first time it's opened, not on mount -- these
   // are real Earth Engine + local-computation calls on the backend, worth
   // deferring until someone actually asks to see them. Each of the four
@@ -229,6 +295,9 @@ export default function App() {
           era5Visible={era5Visible}
           era5Opacity={era5Opacity}
           era5TileUrl={era5Tile?.tileUrlTemplate || null}
+          era5AnnualVisible={era5AnnualVisible}
+          era5AnnualOpacity={era5AnnualOpacity}
+          era5AnnualTileUrl={era5AnnualTile?.tileUrlTemplate || null}
           boundaryVisible={boundaryVisible}
           pkNationalVisible={pkNationalVisible}
           pkProvincesVisible={pkProvincesVisible}
@@ -246,6 +315,7 @@ export default function App() {
           sensorsBriFfVisible={sensorsBriFfVisible}
           sensorsFocus2026Visible={sensorsFocus2026Visible}
           sensorsGmrcWapdaVisible={sensorsGmrcWapdaVisible}
+          riversVisible={riversVisible}
         />
       )}
 
@@ -264,6 +334,19 @@ export default function App() {
           era5Date={era5Tile?.date}
           era5Status={era5Status}
           era5Error={era5Error}
+          era5Annual={config?.era5Annual}
+          era5AnnualVisible={era5AnnualVisible}
+          onToggleEra5Annual={setEra5AnnualVisible}
+          era5AnnualOpacity={era5AnnualOpacity}
+          onEra5AnnualOpacityChange={setEra5AnnualOpacity}
+          era5AnnualRange={era5AnnualRange}
+          era5AnnualYear={era5AnnualYear}
+          onEra5AnnualYearChange={setEra5AnnualYear}
+          era5AnnualTile={era5AnnualTile}
+          era5AnnualStatus={era5AnnualStatus}
+          era5AnnualError={era5AnnualError}
+          era5AnnualPlaying={era5AnnualPlaying}
+          onToggleEra5AnnualPlaying={() => setEra5AnnualPlaying((p) => !p)}
           boundaryVisible={boundaryVisible}
           onToggleBoundary={setBoundaryVisible}
           pkNationalVisible={pkNationalVisible}
@@ -295,6 +378,8 @@ export default function App() {
           onToggleSensorsFocus2026={setSensorsFocus2026Visible}
           sensorsGmrcWapdaVisible={sensorsGmrcWapdaVisible}
           onToggleSensorsGmrcWapda={setSensorsGmrcWapdaVisible}
+          riversVisible={riversVisible}
+          onToggleRivers={setRiversVisible}
         />
         <DataSheet
           feature={selectedFeature}

@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 import buildings
 import era5
+import era5_annual
 import population_raster
 import trends
 
@@ -48,6 +49,12 @@ SENSOR_FILES = {
     "gmrc-wapda": SENSORS_DIR / "gmrcwapda.geojson",
 }
 
+# River / canal / nalla network (polygon geometry -- river bodies, not
+# centerlines). Source was a QGIS export wrapped in a `var rivers = ...`
+# JS assignment; rivers.geojson here has already been unwrapped to plain
+# GeoJSON (see rivers/rivers.qmd for the original QGIS layer metadata).
+RIVERS_FILE = BASE_DIR.parent / "rivers" / "rivers.geojson"
+
 # Country codes referenced in the glacier dataset.
 COUNTRY_NAMES = {
     "AF": "Afghanistan",
@@ -69,6 +76,17 @@ ERA5_LAYER = {
     "minC": -23,
     "maxC": 47,
     "palette": era5.VIS_PARAMS["palette"],
+}
+
+# Annual mean 2m air temperature, 1999-2026, ERA5-Land -- the year-slider
+# layer ported from the GEE Code Editor script (see era5_annual.py). Static
+# display config; the year range itself still comes from /api/era5-annual/range
+# so the frontend has one shape to fetch both layers' ranges from.
+ERA5_ANNUAL_LAYER = {
+    "attribution": "ERA5-Land (ECMWF) via Google Earth Engine",
+    "minC": era5_annual.VIS_PARAMS["min"],
+    "maxC": era5_annual.VIS_PARAMS["max"],
+    "palette": era5_annual.VIS_PARAMS["palette"],
 }
 
 # Gridded population density, HKH-cropped. Unlike ERA5 there's no month
@@ -102,6 +120,7 @@ def config():
     return {
         "countryNames": COUNTRY_NAMES,
         "era5": ERA5_LAYER,
+        "era5Annual": ERA5_ANNUAL_LAYER,
         "populationRaster": POPULATION_RASTER_LAYER,
         "mapCenter": [82.5, 32.0],
         "mapZoom": 2.5,
@@ -147,6 +166,15 @@ def sensor_layer(key: str):
     if not path.exists():
         raise HTTPException(status_code=503, detail=f"Sensor file not available: {path.name}")
     return FileResponse(path, media_type="application/geo+json")
+
+
+@app.get("/api/rivers")
+def rivers():
+    """River / canal / nalla polygons (see RIVERS_FILE above) -- served
+    straight off disk like the other static GeoJSON layers."""
+    if not RIVERS_FILE.exists():
+        raise HTTPException(status_code=503, detail=f"Rivers file not available: {RIVERS_FILE.name}")
+    return FileResponse(RIVERS_FILE, media_type="application/geo+json")
 
 
 @app.get("/api/buildings/index")
@@ -234,6 +262,27 @@ def era5_tile(year: int, month: int):
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
     if result is None:
         raise HTTPException(status_code=404, detail=f"No ERA5 data for {year}-{month:02d}")
+    return result
+
+
+@app.get("/api/era5-annual/range")
+def era5_annual_range():
+    """The earliest/latest years the annual temperature layer will query."""
+    return era5_annual.get_year_range()
+
+
+@app.get("/api/era5-annual/tile")
+def era5_annual_tile(year: int):
+    """Live XYZ tile URL for one calendar year's mean temperature, plus the
+    area-mean reading, HKH-cropped (see era5_annual.py for the boundary)."""
+    if not (era5_annual.MIN_YEAR <= year <= era5_annual.MAX_YEAR):
+        raise HTTPException(status_code=400, detail=f"year must be {era5_annual.MIN_YEAR}-{era5_annual.MAX_YEAR}")
+    try:
+        result = era5_annual.get_tile_for_year(year)
+    except era5_annual.Era5AnnualUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"No ERA5-Land data for {year}")
     return result
 
 

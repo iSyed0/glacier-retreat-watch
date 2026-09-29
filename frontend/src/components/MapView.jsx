@@ -26,6 +26,46 @@ export const SENSOR_LAYERS = [
   { key: 'gmrcWapda', url: '/api/sensors/gmrc-wapda', label: 'GM-RC / WAPDA stations', color: '#ffe600' },
 ]
 
+// River / canal / nalla polygons (backend RIVERS_FILE) -- one static layer,
+// fetched lazily like the Pakistan districts boundary below since the
+// source file is a hefty ~9MB.
+const RIVERS_LAYER = { key: 'rivers', url: '/api/rivers', color: '#00b8ff' }
+
+function addRiversLayer(map, beforeId) {
+  const { url, color } = RIVERS_LAYER
+  if (map.getLayer('rivers-line')) return
+  map.addSource('rivers', { type: 'geojson', data: url })
+  map.addLayer({
+    id: 'rivers-fill',
+    type: 'fill',
+    source: 'rivers',
+    paint: { 'fill-color': color, 'fill-opacity': 0.28 },
+  }, beforeId)
+  map.addLayer({
+    id: 'rivers-line',
+    type: 'line',
+    source: 'rivers',
+    paint: { 'line-color': color, 'line-width': 1, 'line-opacity': 0.9 },
+  }, beforeId)
+
+  map.on('mouseenter', 'rivers-fill', () => { map.getCanvas().style.cursor = 'pointer' })
+  map.on('mouseleave', 'rivers-fill', () => { map.getCanvas().style.cursor = '' })
+  map.on('click', 'rivers-fill', (e) => {
+    const { Name, Type } = e.features[0].properties
+    new mapboxgl.Popup({ closeButton: true, maxWidth: '240px', className: 'sensor-popup-wrap' })
+      .setLngLat(e.lngLat)
+      .setHTML(`
+        <div class="sensor-popup" style="--sensor-color: ${color}">
+          <div class="sensor-popup-header">${escapeHtml(Name || 'River')}</div>
+          <div class="sensor-popup-rows">
+            <div class="sensor-popup-row"><span class="k">Type</span><span class="v">${escapeHtml(Type || 'Unknown')}</span></div>
+          </div>
+        </div>
+      `)
+      .addTo(map)
+  })
+}
+
 // Properties come from hand-maintained field survey sheets, so keys vary
 // network to network (StationNam vs. VillageNam vs. "Station Na", etc.) --
 // rather than mapping each one, just render whatever's present. The header
@@ -201,6 +241,9 @@ export default function MapView({
   era5Visible,
   era5Opacity,
   era5TileUrl,
+  era5AnnualVisible,
+  era5AnnualOpacity,
+  era5AnnualTileUrl,
   boundaryVisible,
   pkNationalVisible,
   pkProvincesVisible,
@@ -218,6 +261,7 @@ export default function MapView({
   sensorsBriFfVisible,
   sensorsFocus2026Visible,
   sensorsGmrcWapdaVisible,
+  riversVisible,
 }) {
   const pkVisible = { national: pkNationalVisible, provinces: pkProvincesVisible, districts: pkDistrictsVisible }
   const sensorsVisible = {
@@ -240,7 +284,7 @@ export default function MapView({
   // after the mount effect's closure was created -- always sees the current
   // toggle state instead of whatever was true when the map was first built.
   const stateRef = useRef({})
-  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible }
+  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible }
 
   // One-time map setup.
   useEffect(() => {
@@ -310,7 +354,7 @@ export default function MapView({
     // markers, boundaries, and ERA5 overlay survive a basemap switch.
     function addOverlayLayers() {
       if (map.getSource('hkh-boundary')) return // already (re)built for this style
-      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible } = stateRef.current
+      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible } = stateRef.current
 
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
@@ -456,6 +500,22 @@ export default function MapView({
         }, 'cluster-dots')
       }
 
+      if (era5AnnualTileUrl) {
+        map.addSource('era5-annual', {
+          type: 'raster',
+          tiles: [era5AnnualTileUrl],
+          tileSize: 256,
+          attribution: config.era5Annual?.attribution,
+        })
+        map.addLayer({
+          id: 'era5-annual-layer',
+          type: 'raster',
+          source: 'era5-annual',
+          layout: { visibility: era5AnnualVisible ? 'visible' : 'none' },
+          paint: { 'raster-opacity': era5AnnualOpacity },
+        }, 'cluster-dots')
+      }
+
       if (popRasterTileUrl) {
         map.addSource('population-raster', {
           type: 'raster',
@@ -499,6 +559,8 @@ export default function MapView({
         if (!sensorsVisible[layer.key]) return // not toggled on -- don't fetch until asked
         addSensorLayer(map, layer, 'cluster-dots')
       })
+
+      if (riversVisible) addRiversLayer(map, 'cluster-dots') // else: not toggled on, don't fetch until asked
     }
 
     map.on('style.load', () => {
@@ -653,6 +715,57 @@ export default function MapView({
     map.setPaintProperty('era5-temp-layer', 'raster-opacity', era5Opacity)
   }, [era5Opacity])
 
+  // Add (or swap the tile URL of) the annual-temperature raster layer
+  // whenever the selected year resolves to a fresh tile -- same pattern as
+  // the monthly ERA5 layer above.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !era5AnnualTileUrl) return
+
+    const apply = () => {
+      const source = map.getSource('era5-annual')
+      if (source) {
+        source.setTiles([era5AnnualTileUrl])
+        return
+      }
+      map.addSource('era5-annual', {
+        type: 'raster',
+        tiles: [era5AnnualTileUrl],
+        tileSize: 256,
+        attribution: config.era5Annual?.attribution,
+      })
+      const beforeId = map.getLayer('cluster-dots') ? 'cluster-dots' : undefined
+      map.addLayer({
+        id: 'era5-annual-layer',
+        type: 'raster',
+        source: 'era5-annual',
+        layout: { visibility: era5AnnualVisible ? 'visible' : 'none' },
+        paint: { 'raster-opacity': era5AnnualOpacity },
+      }, beforeId)
+    }
+
+    if (map.isStyleLoaded()) {
+      apply()
+    } else {
+      map.once('load', apply)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [era5AnnualTileUrl])
+
+  // Sync annual-temperature layer visibility with the toggle.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.getLayer('era5-annual-layer')) return
+    map.setLayoutProperty('era5-annual-layer', 'visibility', era5AnnualVisible ? 'visible' : 'none')
+  }, [era5AnnualVisible])
+
+  // Sync annual-temperature layer opacity with the slider.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.getLayer('era5-annual-layer')) return
+    map.setPaintProperty('era5-annual-layer', 'raster-opacity', era5AnnualOpacity)
+  }, [era5AnnualOpacity])
+
   // Add the population-density raster once its tile URL resolves (a single
   // fetch, unlike ERA5's per-month tile -- see App.jsx) -- same pattern as
   // ERA5 above otherwise.
@@ -759,6 +872,30 @@ export default function MapView({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pkNationalVisible, pkProvincesVisible, pkDistrictsVisible])
+
+  // Rivers / canals / nallas -- same lazy, "don't fetch until asked"
+  // pattern as the Pakistan boundaries above (source file is ~9MB).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const apply = () => {
+      if (map.getLayer('rivers-line')) {
+        const visibility = riversVisible ? 'visible' : 'none'
+        map.setLayoutProperty('rivers-fill', 'visibility', visibility)
+        map.setLayoutProperty('rivers-line', 'visibility', visibility)
+        return
+      }
+      if (!riversVisible) return // nothing to hide -- don't fetch until asked
+      addRiversLayer(map, map.getLayer('cluster-dots') ? 'cluster-dots' : undefined)
+    }
+
+    if (map.isStyleLoaded()) {
+      apply()
+    } else {
+      map.once('load', apply)
+    }
+  }, [riversVisible])
 
   // Building footprints -- same lazy, "don't fetch until asked" pattern as
   // the Pakistan boundaries above: the ~160 district sources are only

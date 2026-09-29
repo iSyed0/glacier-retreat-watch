@@ -559,6 +559,32 @@
   color: var(--red);
 }
 
+.era5-annual-year-field .era5-opacity-value {
+  width: 34px;
+}
+.era5-annual-play {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.era5-annual-play:hover {
+  background: rgba(255,255,255,0.08);
+}
+.era5-annual-mean {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* Floating data sheet */
 #datasheet {
   position: absolute;

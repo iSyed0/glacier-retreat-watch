@@ -67,6 +67,19 @@ export default function Legend({
   era5Date,
   era5Status,
   era5Error,
+  era5Annual,
+  era5AnnualVisible,
+  onToggleEra5Annual,
+  era5AnnualOpacity,
+  onEra5AnnualOpacityChange,
+  era5AnnualRange,
+  era5AnnualYear,
+  onEra5AnnualYearChange,
+  era5AnnualTile,
+  era5AnnualStatus,
+  era5AnnualError,
+  era5AnnualPlaying,
+  onToggleEra5AnnualPlaying,
   boundaryVisible,
   onToggleBoundary,
   pkNationalVisible,
@@ -98,8 +111,11 @@ export default function Legend({
   onToggleSensorsFocus2026,
   sensorsGmrcWapdaVisible,
   onToggleSensorsGmrcWapda,
+  riversVisible,
+  onToggleRivers,
 }) {
   const gradient = era5 ? `linear-gradient(to right, ${era5.palette.map((c) => '#' + c).join(',')})` : ''
+  const era5AnnualGradient = era5Annual ? `linear-gradient(to right, ${era5Annual.palette.map((c) => '#' + c).join(',')})` : ''
   const popRasterGradient = popRaster ? `linear-gradient(to right, ${popRaster.palette.map((c) => '#' + c).join(',')})` : ''
 
   const panelRef = useRef(null)
@@ -223,6 +239,13 @@ export default function Legend({
               label="Study area boundary"
               checked={boundaryVisible}
               onChange={onToggleBoundary}
+            />
+
+            <LayerRow
+              swatch={lineSwatch('#00b8ff')}
+              label="Rivers / canals / nallas"
+              checked={riversVisible}
+              onChange={onToggleRivers}
             />
 
             <div className="legend-group">
@@ -372,6 +395,75 @@ export default function Legend({
                       <div className="era5-scale-labels">
                         <span>{era5.minC}°C</span>
                         <span>{era5.maxC}°C</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {era5Annual && (
+              <>
+                <LayerRow
+                  swatch={<span className="swatch gradient" style={{ background: era5AnnualGradient }} />}
+                  label={`Annual temp (2m${era5AnnualYear != null ? `, ${era5AnnualYear}` : ''})`}
+                  checked={era5AnnualVisible}
+                  onChange={onToggleEra5Annual}
+                />
+
+                {era5AnnualVisible && (
+                  <div id="era5-controls">
+                    {era5AnnualRange && (
+                      <div className="era5-field era5-annual-year-field">
+                        <label htmlFor="era5-annual-year">Year</label>
+                        <input
+                          id="era5-annual-year"
+                          type="range"
+                          min={era5AnnualRange.min}
+                          max={era5AnnualRange.max}
+                          step="1"
+                          value={era5AnnualYear ?? era5AnnualRange.min}
+                          onChange={(e) => onEra5AnnualYearChange(Number(e.target.value))}
+                        />
+                        <span className="era5-opacity-value">{era5AnnualYear}</span>
+                        <button
+                          type="button"
+                          className="era5-annual-play"
+                          onClick={onToggleEra5AnnualPlaying}
+                          title={era5AnnualPlaying ? 'Pause' : 'Play'}
+                        >
+                          {era5AnnualPlaying ? '⏸' : '▶'}
+                        </button>
+                      </div>
+                    )}
+
+                    {era5AnnualStatus === 'error' && (
+                      <div className="era5-error">No data for that year{era5AnnualError ? ` — ${era5AnnualError}` : ''}</div>
+                    )}
+
+                    {era5AnnualStatus === 'ready' && era5AnnualTile?.meanTempC != null && (
+                      <div className="era5-annual-mean">HKH average: {era5AnnualTile.meanTempC.toFixed(1)}°C</div>
+                    )}
+
+                    <div className="era5-field">
+                      <label htmlFor="era5-annual-opacity">Opacity</label>
+                      <input
+                        id="era5-annual-opacity"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={era5AnnualOpacity}
+                        onChange={(e) => onEra5AnnualOpacityChange(Number(e.target.value))}
+                      />
+                      <span className="era5-opacity-value">{Math.round(era5AnnualOpacity * 100)}%</span>
+                    </div>
+
+                    <div id="era5-scale">
+                      <div className="era5-scale-bar" style={{ background: era5AnnualGradient }} />
+                      <div className="era5-scale-labels">
+                        <span>{era5Annual.minC}°C</span>
+                        <span>{era5Annual.maxC}°C</span>
                       </div>
                     </div>
                   </div>

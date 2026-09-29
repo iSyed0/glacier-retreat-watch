@@ -17,6 +17,14 @@ PROJECT_ID = "my-project-3191-1760691930746"
 # the service account above.
 BOUNDARY_ASSET_ID = "projects/endless-gamma-379613/assets/HKH"
 
+# A separate, more detailed HKH outline (table asset ingested directly into
+# the endless-gamma-379613 project, so already readable by the service
+# account above with no extra sharing step) used only by the annual
+# temperature layer (era5_annual.py) -- kept distinct from BOUNDARY_ASSET_ID
+# rather than swapped in for it, since nothing else has been asked to move
+# off the original boundary.
+HKH_BDA_ASSET_ID = "projects/endless-gamma-379613/assets/hkh_bda"
+
 # Public country-boundary dataset (LSIB) used to clip the HKH boundary down
 # to one country's portion of it -- e.g. the Pakistan-only trend endpoint.
 # Only the country names this app actually needs a clipped boundary for.
@@ -58,3 +66,9 @@ def boundary_geometry(country=None):
         ee.Filter.eq("country_na", country_name)
     ).geometry()
     return hkh.intersection(country_geom, ee.ErrorMargin(1000))
+
+
+def bda_boundary_geometry():
+    """The alternate HKH_BDA_ASSET_ID boundary -- see its comment above."""
+    ensure_init()
+    return ee.FeatureCollection(HKH_BDA_ASSET_ID).geometry()
