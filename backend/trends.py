@@ -4,7 +4,7 @@ Region-wide glacier elevation-change vs. temperature trend, over the four
 publish per-glacier elevation change for -- that's the actual resolution
 the glacier data supports (not truly annual; see backend/data/glaciers.geojson's
 `p` field), so temperature is aggregated to match rather than pretending
-either series is annual. A fifth period, 2020-2026, extends both series
+either series is annual. A fifth period, 2019-2025, extends both series
 with real (not projected) data -- see PROJECTED_PERIOD below.
 """
 
@@ -25,13 +25,13 @@ GLACIERS_FILE = Path(__file__).resolve().parent / "data" / "glaciers.geojson"
 # record.
 PERIODS = [(1999, 2004), (2004, 2009), (2009, 2014), (2014, 2019)]
 
-# 2020-2026 update, sourced from the `pRecent` field (see the glacier-merge
-# commit) rather than `p` -- WGMS's Annual Mass-Change Estimates (Dussaillant
-# et al. 2025), not the original Hugonnet et al. 2021 figures, so it's kept
-# in its own field/period rather than appended to `p`. 2025 is the latest
-# hydrological year actually published; "2026" is this app's label for the
-# period, not a claim that 2026 itself has data.
-PROJECTED_PERIOD = (2020, 2026)
+# 2019-2025 update (6 hydrological years: 2020-2025), sourced from the
+# `pRecent` field (see the glacier-merge commit) rather than `p` -- WGMS's
+# Annual Mass-Change Estimates (Dussaillant et al. 2025), not the original
+# Hugonnet et al. 2021 figures, so it's kept in its own field/period rather
+# than appended to `p`. 2025 is the latest hydrological year actually
+# published -- the period is labeled to end there, not at 2026.
+PROJECTED_PERIOD = (2019, 2025)
 
 # ERA5-Land, not the legacy ERA5 monthly collection (frozen since 2020-06) --
 # same source as the map's annual-temperature layer (era5_annual.py), reused
