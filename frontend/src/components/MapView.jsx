@@ -375,16 +375,27 @@ export default function MapView({
         paint: { 'line-color': '#ffcc00', 'line-width': 2, 'line-opacity': 0.85 },
       })
 
+      // dec/inc are the all-time split; decP0/incP0..decP4/incP4 are the
+      // same count per period (see the glacier-merge script's trendP0..
+      // trendP4) -- computed once here, all of them, rather than rebuilding
+      // this clustered source every time the period slider moves, which
+      // would mean reprocessing all 38k features on every step.
+      const clusterProperties = {
+        dec: ['+', ['case', ['==', ['get', 'trend'], -1], 1, 0]],
+        inc: ['+', ['case', ['==', ['get', 'trend'], 1], 1, 0]],
+      }
+      for (let i = 0; i < 5; i++) {
+        clusterProperties[`decP${i}`] = ['+', ['case', ['==', ['get', `trendP${i}`], -1], 1, 0]]
+        clusterProperties[`incP${i}`] = ['+', ['case', ['==', ['get', `trendP${i}`], 1], 1, 0]]
+      }
+
       map.addSource('glaciers', {
         type: 'geojson',
         data: '/api/glaciers',
         cluster: true,
         clusterRadius: 45,
         clusterMaxZoom: 8,
-        clusterProperties: {
-          dec: ['+', ['case', ['==', ['get', 'trend'], -1], 1, 0]],
-          inc: ['+', ['case', ['==', ['get', 'trend'], 1], 1, 0]],
-        },
+        clusterProperties,
       })
 
       const decRatio = ['/', ['get', 'dec'], ['get', 'point_count']]
@@ -697,31 +708,43 @@ export default function MapView({
     map.setPaintProperty('era5-periods-layer', 'raster-opacity', era5PeriodsOpacity)
   }, [era5PeriodsOpacity])
 
-  // Recolor individual glacier dots (and their blinking outlines) by the
-  // selected period's own change, in place of their normal all-time
-  // trend, whenever the period-temperature layer is on -- and revert them
-  // the moment it's switched off, rather than leaving the map "stuck" on
-  // whichever period was last viewed. Each glacier carries a flat
-  // trendP0..trendP4 property per period (see the glacier-merge script)
-  // alongside its all-time `trend`, precomputed rather than derived from
-  // the `p`/`pRecent` arrays at style-time, since Mapbox expressions can't
-  // usefully index into nested per-feature arrays.
-  //
-  // Cluster circles (the aggregated bubbles shown when zoomed out) are
-  // deliberately left showing the all-time trend split -- their dec/inc
-  // counts are baked into the source's clusterProperties at load time and
-  // would need the whole 38k-feature source rebuilt to recompute per
-  // period, which isn't worth doing for a bubble that's zoomed-out anyway.
+  // Recolor individual glacier dots (and their blinking outlines), plus
+  // the zoomed-out cluster bubbles' rings, by the selected period's own
+  // change, in place of their normal all-time trend -- and revert the
+  // moment the period-temperature layer is switched off, rather than
+  // leaving the map "stuck" on whichever period was last viewed. Each
+  // glacier carries a flat trendP0..trendP4 property per period (see the
+  // glacier-merge script) alongside its all-time `trend`, precomputed
+  // rather than derived from the `p`/`pRecent` arrays at style-time,
+  // since Mapbox expressions can't usefully index into nested per-feature
+  // arrays; clusters get the equivalent decP0/incP0..decP4/incP4 cluster
+  // properties, computed once when the source loads (see addOverlayLayers
+  // above) rather than rebuilt per period, which would mean reclustering
+  // all 38k features on every slider step.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.getLayer('glacier-dots')) return
+    if (!map) return
 
-    const active = era5PeriodsVisible && periodIndex != null
-    const trendProp = active ? `trendP${periodIndex}` : 'trend'
+    const apply = () => {
+      if (!map.getLayer('glacier-dots')) return
 
-    map.setPaintProperty('glacier-dots', 'circle-color', ['match', ['get', trendProp], -1, '#ff3b30', 1, '#5ec8ff', '#ffffff'])
-    map.setFilter('glacier-outline-decreasing', ['all', ['!', ['has', 'point_count']], ['==', ['get', trendProp], -1]])
-    map.setFilter('glacier-outline-increasing', ['all', ['!', ['has', 'point_count']], ['==', ['get', trendProp], 1]])
+      const active = era5PeriodsVisible && periodIndex != null
+      const trendProp = active ? `trendP${periodIndex}` : 'trend'
+      const decProp = active ? `decP${periodIndex}` : 'dec'
+
+      map.setPaintProperty('glacier-dots', 'circle-color', ['match', ['get', trendProp], -1, '#ff3b30', 1, '#5ec8ff', '#ffffff'])
+      map.setFilter('glacier-outline-decreasing', ['all', ['!', ['has', 'point_count']], ['==', ['get', trendProp], -1]])
+      map.setFilter('glacier-outline-increasing', ['all', ['!', ['has', 'point_count']], ['==', ['get', trendProp], 1]])
+
+      const decRatio = ['/', ['get', decProp], ['get', 'point_count']]
+      map.setPaintProperty('cluster-outline', 'circle-stroke-color', ['step', decRatio, '#5ec8ff', 0.4, '#8ea3b6', 0.6, '#ff3b30'])
+    }
+
+    if (map.isStyleLoaded() && map.getLayer('glacier-dots')) {
+      apply()
+    } else {
+      map.once('load', apply)
+    }
   }, [era5PeriodsVisible, periodIndex])
 
   // Add the population-density raster once its tile URL resolves (a single
