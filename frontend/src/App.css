@@ -459,7 +459,35 @@
   border-radius: 50%;
   border: 1.5px solid;
 }
+.layer-row .swatch.class-grid {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  overflow: hidden;
+}
 .layer-row.disabled { opacity: 0.45; }
+
+.landcover-classes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+.landcover-class-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.landcover-class-swatch {
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+}
 
 /* Popup for sensor / monitoring-station point layers -- scoped to the
    sensor-popup-wrap className (set on the Popup instance in MapView) and

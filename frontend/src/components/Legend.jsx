@@ -83,6 +83,13 @@ export default function Legend({
   onPopRasterOpacityChange,
   popRasterStatus,
   popRasterError,
+  landcover,
+  landcoverVisible,
+  onToggleLandcover,
+  landcoverOpacity,
+  onLandcoverOpacityChange,
+  landcoverStatus,
+  landcoverError,
   sensorsGlof2Visible,
   onToggleSensorsGlof2,
   sensorsGlof2DamagedVisible,
@@ -163,6 +170,13 @@ export default function Legend({
 
   const lineSwatch = (color) => <span className="swatch line" style={{ background: color }} />
   const dotSwatch = (color) => <span className="swatch dot-color" style={{ background: color + '33', borderColor: color }} />
+  // A 3x3 grid of class colors -- land cover has exactly 9 classes, so this
+  // doubles as a "this is categorical, not a gradient" visual cue.
+  const classGridSwatch = (colors) => (
+    <span className="swatch class-grid">
+      {colors.map((c, i) => <span key={i} style={{ background: '#' + c }} />)}
+    </span>
+  )
   const sensorColor = Object.fromEntries(SENSOR_LAYERS.map((l) => [l.key, l.color]))
 
   return (
@@ -325,6 +339,48 @@ export default function Legend({
                         <span>0</span>
                         <span>{popRaster.maxDensity.toLocaleString()}+ /km²</span>
                       </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {landcover && (
+              <>
+                <LayerRow
+                  swatch={classGridSwatch(landcover.classes.map((c) => c.color))}
+                  label={`Land cover (${landcover.maxYear})`}
+                  checked={landcoverVisible}
+                  onChange={onToggleLandcover}
+                />
+                {landcoverVisible && (
+                  <div id="era5-controls">
+                    {landcoverStatus === 'loading' && <div className="era5-hint">Loading…</div>}
+                    {landcoverStatus === 'error' && (
+                      <div className="era5-error">Land cover unavailable{landcoverError ? ` — ${landcoverError}` : ''}</div>
+                    )}
+
+                    <div className="era5-field">
+                      <label htmlFor="landcover-opacity">Opacity</label>
+                      <input
+                        id="landcover-opacity"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={landcoverOpacity}
+                        onChange={(e) => onLandcoverOpacityChange(Number(e.target.value))}
+                      />
+                      <span className="era5-opacity-value">{Math.round(landcoverOpacity * 100)}%</span>
+                    </div>
+
+                    <div className="landcover-classes">
+                      {landcover.classes.map((c) => (
+                        <div key={c.value} className="landcover-class-row">
+                          <span className="landcover-class-swatch" style={{ background: '#' + c.color }} />
+                          <span>{c.name}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

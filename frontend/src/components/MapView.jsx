@@ -349,6 +349,9 @@ export default function MapView({
   popRasterVisible,
   popRasterOpacity,
   popRasterTileUrl,
+  landcoverVisible,
+  landcoverOpacity,
+  landcoverTileUrl,
   sensorsGlof2Visible,
   sensorsGlof2DamagedVisible,
   sensorsBriFfVisible,
@@ -387,7 +390,7 @@ export default function MapView({
   // after the mount effect's closure was created -- always sees the current
   // toggle state instead of whatever was true when the map was first built.
   const stateRef = useRef({})
-  stateRef.current = { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible, rgi7HkhRegionsVisible }
+  stateRef.current = { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, landcoverTileUrl, landcoverVisible, landcoverOpacity, sensorsVisible, riversVisible, rgi7HkhRegionsVisible }
 
   // One-time map setup.
   useEffect(() => {
@@ -457,7 +460,7 @@ export default function MapView({
     // markers, boundaries, and ERA5 overlay survive a basemap switch.
     function addOverlayLayers() {
       if (map.getSource('hkh-boundary')) return // already (re)built for this style
-      const { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible, rgi7HkhRegionsVisible } = stateRef.current
+      const { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, landcoverTileUrl, landcoverVisible, landcoverOpacity, sensorsVisible, riversVisible, rgi7HkhRegionsVisible } = stateRef.current
 
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
@@ -605,6 +608,22 @@ export default function MapView({
           source: 'population-raster',
           layout: { visibility: popRasterVisible ? 'visible' : 'none' },
           paint: { 'raster-opacity': popRasterOpacity },
+        }, 'cluster-dots')
+      }
+
+      if (landcoverTileUrl) {
+        map.addSource('landcover', {
+          type: 'raster',
+          tiles: [landcoverTileUrl],
+          tileSize: 256,
+          attribution: config.landcover?.attribution,
+        })
+        map.addLayer({
+          id: 'landcover-layer',
+          type: 'raster',
+          source: 'landcover',
+          layout: { visibility: landcoverVisible ? 'visible' : 'none' },
+          paint: { 'raster-opacity': landcoverOpacity },
         }, 'cluster-dots')
       }
 
@@ -844,6 +863,57 @@ export default function MapView({
     if (!map || !map.getLayer('population-raster-layer')) return
     map.setPaintProperty('population-raster-layer', 'raster-opacity', popRasterOpacity)
   }, [popRasterOpacity])
+
+  // Add the land-cover raster once its tile URL resolves -- same pattern
+  // as population-density above (a single tile per toggle-on, not a
+  // per-frame slider like the annual-temperature layer).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !landcoverTileUrl) return
+
+    const apply = () => {
+      const source = map.getSource('landcover')
+      if (source) {
+        source.setTiles([landcoverTileUrl])
+        return
+      }
+      map.addSource('landcover', {
+        type: 'raster',
+        tiles: [landcoverTileUrl],
+        tileSize: 256,
+        attribution: config.landcover?.attribution,
+      })
+      const beforeId = map.getLayer('cluster-dots') ? 'cluster-dots' : undefined
+      map.addLayer({
+        id: 'landcover-layer',
+        type: 'raster',
+        source: 'landcover',
+        layout: { visibility: landcoverVisible ? 'visible' : 'none' },
+        paint: { 'raster-opacity': landcoverOpacity },
+      }, beforeId)
+    }
+
+    if (map.isStyleLoaded()) {
+      apply()
+    } else {
+      map.once('load', apply)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landcoverTileUrl])
+
+  // Sync land-cover layer visibility with the toggle.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.getLayer('landcover-layer')) return
+    map.setLayoutProperty('landcover-layer', 'visibility', landcoverVisible ? 'visible' : 'none')
+  }, [landcoverVisible])
+
+  // Sync land-cover layer opacity with the slider.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.getLayer('landcover-layer')) return
+    map.setPaintProperty('landcover-layer', 'raster-opacity', landcoverOpacity)
+  }, [landcoverOpacity])
 
   // Sync study area boundary visibility with its toggle.
   useEffect(() => {

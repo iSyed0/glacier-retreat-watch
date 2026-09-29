@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 import buildings
 import era5_annual
+import landcover
 import population_raster
 import trends
 
@@ -96,6 +97,17 @@ POPULATION_RASTER_LAYER = {
     "palette": population_raster.VIS_PARAMS["palette"],
 }
 
+# Sentinel-2 10m annual land cover, HKH-cropped -- the classes are
+# categorical (see landcover.py), not a continuous gradient like ERA5/
+# population, so the frontend renders this legend as class swatches
+# rather than a gradient bar.
+LANDCOVER_LAYER = {
+    "attribution": "Esri / Impact Observatory Sentinel-2 10m LULC (CC BY-4.0) via Google Earth Engine",
+    "minYear": landcover.MIN_YEAR,
+    "maxYear": landcover.MAX_YEAR,
+    "classes": landcover.CLASSES,
+}
+
 app = FastAPI(title="HKH Glacier Watch API")
 
 # Allow the Vite dev server to call the API during development.
@@ -134,6 +146,7 @@ def config():
         "countryNames": COUNTRY_NAMES,
         "era5Annual": ERA5_ANNUAL_LAYER,
         "populationRaster": POPULATION_RASTER_LAYER,
+        "landcover": LANDCOVER_LAYER,
         "mapCenter": [82.5, 32.0],
         "mapZoom": 2.5,
         # Bounding box of the HKH study area boundary (backend/data/hkh_boundary.geojson)
@@ -218,6 +231,19 @@ def population_raster_tile():
     try:
         return population_raster.get_tile()
     except population_raster.PopulationRasterUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
+
+
+@app.get("/api/landcover/tile")
+def landcover_tile(year: int = landcover.MAX_YEAR):
+    """Live XYZ tile URL for one year's Sentinel-2 10m land cover,
+    HKH-cropped (mosaicked across every UTM tile covering the region --
+    see landcover.py). Defaults to the most recent year."""
+    try:
+        return landcover.get_tile(year)
+    except landcover.LandcoverYearInvalid as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except landcover.LandcoverUnavailable as exc:
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
 
 

@@ -91,6 +91,11 @@ export default function App() {
   const [sensorsGmrcWapdaVisible, setSensorsGmrcWapdaVisible] = useState(false)
   const [riversVisible, setRiversVisible] = useState(false)
   const [rgi7HkhRegionsVisible, setRgi7HkhRegionsVisible] = useState(false)
+  const [landcoverVisible, setLandcoverVisible] = useState(false)
+  const [landcoverOpacity, setLandcoverOpacity] = useState(0.7)
+  const [landcoverTile, setLandcoverTile] = useState(null) // { tileUrlTemplate, year }
+  const [landcoverStatus, setLandcoverStatus] = useState('idle') // idle | loading | ready | error
+  const [landcoverError, setLandcoverError] = useState('')
   const [charts, setCharts] = useState(() =>
     Object.fromEntries(CHART_DEFS.map((d) => [d.key, { open: false, data: null, status: 'idle', error: '' }]))
   )
@@ -191,24 +196,42 @@ export default function App() {
   }, [era5AnnualVisible, era5AnnualStatus])
 
   // Play/pause: advance one year at a time on a fixed interval (matching
-  // the 1200ms cadence of the GEE script this was ported from), stopping
-  // automatically at the last year rather than looping. Gated on the batch
-  // fetch above being done -- every year is instant once it is, so there's
-  // no per-frame loading state to juggle during playback.
+  // the 1200ms cadence of the GEE script this was ported from), looping
+  // back to the first year at the end rather than stopping -- playback
+  // only stops when paused manually. Gated on the batch fetch above being
+  // done -- every year is instant once it is, so there's no per-frame
+  // loading state to juggle during playback.
   useEffect(() => {
     if (!era5AnnualPlaying || !era5AnnualRange || era5AnnualStatus !== 'ready') return
     const id = setInterval(() => {
-      setEra5AnnualYear((y) => {
-        const next = y + 1
-        if (next > era5AnnualRange.max) {
-          setEra5AnnualPlaying(false)
-          return y
-        }
-        return next
-      })
+      setEra5AnnualYear((y) => (y >= era5AnnualRange.max ? era5AnnualRange.min : y + 1))
     }, 1200)
     return () => clearInterval(id)
   }, [era5AnnualPlaying, era5AnnualRange, era5AnnualStatus])
+
+  // Land cover -- fetch the current year's tile the first time the layer
+  // is switched on (same "don't fetch until asked" pattern as rivers/PK
+  // districts), not on mount.
+  useEffect(() => {
+    if (!landcoverVisible || landcoverStatus !== 'idle') return
+    setLandcoverStatus('loading')
+    fetch('/api/landcover/tile')
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}))
+          throw new Error(body.detail || `request failed (${r.status})`)
+        }
+        return r.json()
+      })
+      .then((tile) => {
+        setLandcoverTile(tile)
+        setLandcoverStatus('ready')
+      })
+      .catch((err) => {
+        setLandcoverStatus('error')
+        setLandcoverError(err.message)
+      })
+  }, [landcoverVisible, landcoverStatus])
 
   // Fetch a chart's data the first time it's opened, not on mount -- these
   // are real Earth Engine + local-computation calls on the backend, worth
@@ -275,6 +298,9 @@ export default function App() {
           popRasterVisible={popRasterVisible}
           popRasterOpacity={popRasterOpacity}
           popRasterTileUrl={popRasterTile?.tileUrlTemplate || null}
+          landcoverVisible={landcoverVisible}
+          landcoverOpacity={landcoverOpacity}
+          landcoverTileUrl={landcoverTile?.tileUrlTemplate || null}
           sensorsGlof2Visible={sensorsGlof2Visible}
           sensorsGlof2DamagedVisible={sensorsGlof2DamagedVisible}
           sensorsBriFfVisible={sensorsBriFfVisible}
@@ -316,6 +342,13 @@ export default function App() {
           onPopRasterOpacityChange={setPopRasterOpacity}
           popRasterStatus={popRasterStatus}
           popRasterError={popRasterError}
+          landcover={config?.landcover}
+          landcoverVisible={landcoverVisible}
+          onToggleLandcover={setLandcoverVisible}
+          landcoverOpacity={landcoverOpacity}
+          onLandcoverOpacityChange={setLandcoverOpacity}
+          landcoverStatus={landcoverStatus}
+          landcoverError={landcoverError}
           sensorsGlof2Visible={sensorsGlof2Visible}
           onToggleSensorsGlof2={setSensorsGlof2Visible}
           sensorsGlof2DamagedVisible={sensorsGlof2DamagedVisible}
