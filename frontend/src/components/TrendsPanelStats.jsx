@@ -237,14 +237,24 @@ export default function TrendsPanelStats({
       (sum, p) => (p[metric.rateKey] != null ? sum + p[metric.rateKey] * (p.endYear - p.startYear) : sum),
       0
     )
-    const tempDeltaC = first.meanTempC != null && last.meanTempC != null ? last.meanTempC - first.meanTempC : null
+    // Temperature change uses the last period that actually has a real ERA5
+    // figure, not just periods[n-1] -- the 2020-2026 SSP585 period has none
+    // (ECMWF/ERA5/MONTHLY stops at 2020-06), so periods[n-1] would always
+    // read null once that period is present.
+    const firstWithTemp = periods.find((p) => p.meanTempC != null)
+    const lastWithTemp = [...periods].reverse().find((p) => p.meanTempC != null)
+    const tempDeltaC = firstWithTemp && lastWithTemp && firstWithTemp !== lastWithTemp
+      ? lastWithTemp.meanTempC - firstWithTemp.meanTempC
+      : null
     return {
       spanLabel: `${first.startYear}–${last.endYear}`,
       baselineLabel: `${first.startYear}–${first.endYear}`,
       cumulativePrimary,
       tempDeltaC,
+      tempSpanLabel: firstWithTemp && lastWithTemp ? `${firstWithTemp.startYear}–${lastWithTemp.endYear}` : `${first.startYear}–${last.endYear}`,
       baselineAreaKm2: first.totalAreaKm2,
       baselineCount: first.glacierCount,
+      hasProjectedPeriod: last.startYear === 2020 && last.meanTempC == null,
     }
   }, [periods, n, metric.rateKey])
 
@@ -370,7 +380,7 @@ export default function TrendsPanelStats({
                     label="Temperature change"
                     value={stats.tempDeltaC != null ? `${stats.tempDeltaC >= 0 ? '+' : ''}${stats.tempDeltaC.toFixed(2)}` : '—'}
                     unit="°C"
-                    sub={`${stats.spanLabel} change`}
+                    sub={`${stats.tempSpanLabel} change`}
                   />
                   <StatCard
                     icon="area"
@@ -476,6 +486,7 @@ export default function TrendsPanelStats({
                     {metric.methodNote(scopeNote)} Temperature: ERA5
                     monthly reanalysis (ECMWF), averaged over the same region for each
                     period, via Google Earth Engine.
+                    {stats?.hasProjectedPeriod && ' The 2020–26 period is a regional SSP5-8.5 volume-projection model covering only the glaciers matched to it (see that period’s glacier count above) -- a smaller, geographically narrower sample than the historical periods, so treat it as directional rather than a like-for-like total. No ERA5 figure is available that far forward (the collection stops at 2020-06), hence the blank temperature reading.'}
                   </div>
                 </div>
               </div>
@@ -495,7 +506,7 @@ export default function TrendsPanelStats({
           <div className="tplus-tooltip-row">
             <span className="tplus-key" style={{ background: TEMP_COLOR }} />
             <span className="tplus-tooltip-label">Mean temperature</span>
-            <span className="tplus-tooltip-value">{active.meanTempC?.toFixed(2)} °C</span>
+            <span className="tplus-tooltip-value">{active.meanTempC != null ? `${active.meanTempC.toFixed(2)} °C` : '—'}</span>
           </div>
           <div className="tplus-tooltip-row muted">
             <span className="tplus-tooltip-label">Glaciers sampled</span>

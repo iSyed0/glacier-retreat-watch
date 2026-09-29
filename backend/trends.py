@@ -23,6 +23,15 @@ GLACIERS_FILE = Path(__file__).resolve().parent / "data" / "glaciers.geojson"
 # record.
 PERIODS = [(1999, 2004), (2004, 2009), (2009, 2014), (2014, 2019)]
 
+# 2020-2026 SSP5-8.5 volume-projection period, sourced from the `p585`
+# field (see the glacier-merge commit) rather than `p` -- kept out of
+# PERIODS above since it isn't a Hugonnet et al. 2021 figure, and ERA5
+# monthly (ECMWF/ERA5/MONTHLY) stops updating at 2020-06, so there's no
+# real observed temperature to pair with it (get_temperature_trend below
+# still only queries PERIODS; the join functions leave meanTempC unset
+# for this one).
+PROJECTED_PERIOD = (2020, 2026)
+
 ERA5_COLLECTION_ID = "ECMWF/ERA5/MONTHLY"
 ERA5_BAND = "mean_2m_air_temperature"
 
@@ -48,7 +57,8 @@ def get_glacier_trend(country=None):
         gj = json.load(f)
 
     results = []
-    for start, end in PERIODS:
+    for start, end in PERIODS + [PROJECTED_PERIOD]:
+        field = "p585" if (start, end) == PROJECTED_PERIOD else "p"
         weighted_sum = 0.0
         area_sum = 0.0
         count = 0
@@ -56,7 +66,7 @@ def get_glacier_trend(country=None):
             props = feat["properties"]
             if country is not None and props.get("country") != country:
                 continue
-            periods = props.get("p")
+            periods = props.get(field)
             if not periods:
                 continue
             match = next((row for row in periods if row[0] == start and row[1] == end), None)
@@ -93,7 +103,8 @@ def get_mass_balance_trend(country=None):
         gj = json.load(f)
 
     results = []
-    for start, end in PERIODS:
+    for start, end in PERIODS + [PROJECTED_PERIOD]:
+        field = "p585" if (start, end) == PROJECTED_PERIOD else "p"
         volume_sum_mm3 = 0.0  # Mm3 (10^6 m3)
         area_sum = 0.0
         count = 0
@@ -101,7 +112,7 @@ def get_mass_balance_trend(country=None):
             props = feat["properties"]
             if country is not None and props.get("country") != country:
                 continue
-            periods = props.get("p")
+            periods = props.get(field)
             if not periods:
                 continue
             match = next((row for row in periods if row[0] == start and row[1] == end), None)
@@ -162,12 +173,14 @@ def get_temperature_trend(country=None):
 
 def get_trends(country=None):
     """Both series, joined period-by-period -- region-wide by default, or
-    scoped to one country's glaciers + its portion of the HKH boundary."""
-    glacier = {(p["startYear"], p["endYear"]): p for p in get_glacier_trend(country)}
-    temperature = get_temperature_trend(country)
+    scoped to one country's glaciers + its portion of the HKH boundary.
+    Iterates over the glacier side (which now runs through PROJECTED_PERIOD)
+    rather than the temperature side, so the 2020-2026 entry still comes
+    through with meanTempC left as None instead of being dropped."""
+    temperature = {(t["startYear"], t["endYear"]): t["meanTempC"] for t in get_temperature_trend(country)}
     return [
-        {**glacier[(t["startYear"], t["endYear"])], "meanTempC": t["meanTempC"]}
-        for t in temperature
+        {**g, "meanTempC": temperature.get((g["startYear"], g["endYear"]))}
+        for g in get_glacier_trend(country)
     ]
 
 
@@ -175,9 +188,8 @@ def get_mass_balance_trends(country=None):
     """Mass-balance-rate + temperature, joined period-by-period -- the same
     shape as get_trends(), just with massBalanceRateGtYr instead of
     elevationChangeRateM."""
-    mass_balance = {(p["startYear"], p["endYear"]): p for p in get_mass_balance_trend(country)}
-    temperature = get_temperature_trend(country)
+    temperature = {(t["startYear"], t["endYear"]): t["meanTempC"] for t in get_temperature_trend(country)}
     return [
-        {**mass_balance[(t["startYear"], t["endYear"])], "meanTempC": t["meanTempC"]}
-        for t in temperature
+        {**m, "meanTempC": temperature.get((m["startYear"], m["endYear"]))}
+        for m in get_mass_balance_trend(country)
     ]
