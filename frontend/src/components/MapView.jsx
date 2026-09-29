@@ -31,6 +31,12 @@ export const SENSOR_LAYERS = [
 // source file is a hefty ~9MB.
 const RIVERS_LAYER = { key: 'rivers', url: '/api/rivers', color: '#00b8ff' }
 
+// RGI7's Hindu Kush Himalaya glaciated-region outline (backend
+// RGI7_HKH_REGIONS_FILE) -- 3 region polygons (Central Asia, South Asia
+// West, South Asia East), only ~110KB but still fetched lazily on first
+// toggle-on, same as every other optional overlay.
+const RGI7_HKH_REGIONS_LAYER = { key: 'rgi7-hkh-regions', url: '/api/rgi7/hkh-regions', color: '#14b8a6' }
+
 function addRiversLayer(map, beforeId) {
   const { url, color } = RIVERS_LAYER
   if (map.getLayer('rivers-line')) return
@@ -59,6 +65,41 @@ function addRiversLayer(map, beforeId) {
           <div class="sensor-popup-header">${escapeHtml(Name || 'River')}</div>
           <div class="sensor-popup-rows">
             <div class="sensor-popup-row"><span class="k">Type</span><span class="v">${escapeHtml(Type || 'Unknown')}</span></div>
+          </div>
+        </div>
+      `)
+      .addTo(map)
+  })
+}
+
+function addRgi7HkhRegionsLayer(map, beforeId) {
+  const { url, color } = RGI7_HKH_REGIONS_LAYER
+  if (map.getLayer('rgi7-hkh-regions-line')) return
+  map.addSource('rgi7-hkh-regions', { type: 'geojson', data: url })
+  map.addLayer({
+    id: 'rgi7-hkh-regions-fill',
+    type: 'fill',
+    source: 'rgi7-hkh-regions',
+    paint: { 'fill-color': color, 'fill-opacity': 0.08 },
+  }, beforeId)
+  map.addLayer({
+    id: 'rgi7-hkh-regions-line',
+    type: 'line',
+    source: 'rgi7-hkh-regions',
+    paint: { 'line-color': color, 'line-width': 1.5, 'line-opacity': 0.9 },
+  }, beforeId)
+
+  map.on('mouseenter', 'rgi7-hkh-regions-fill', () => { map.getCanvas().style.cursor = 'pointer' })
+  map.on('mouseleave', 'rgi7-hkh-regions-fill', () => { map.getCanvas().style.cursor = '' })
+  map.on('click', 'rgi7-hkh-regions-fill', (e) => {
+    const { name, o1region } = e.features[0].properties
+    new mapboxgl.Popup({ closeButton: true, maxWidth: '260px', className: 'sensor-popup-wrap' })
+      .setLngLat(e.lngLat)
+      .setHTML(`
+        <div class="sensor-popup" style="--sensor-color: ${color}">
+          <div class="sensor-popup-header">${escapeHtml(name || 'RGI7 region')}</div>
+          <div class="sensor-popup-rows">
+            <div class="sensor-popup-row"><span class="k">RGI O1 region</span><span class="v">${escapeHtml(o1region)}</span></div>
           </div>
         </div>
       `)
@@ -314,6 +355,7 @@ export default function MapView({
   sensorsFocus2026Visible,
   sensorsGmrcWapdaVisible,
   riversVisible,
+  rgi7HkhRegionsVisible,
 }) {
   const pkVisible = { national: pkNationalVisible, provinces: pkProvincesVisible, districts: pkDistrictsVisible }
   const sensorsVisible = {
@@ -345,7 +387,7 @@ export default function MapView({
   // after the mount effect's closure was created -- always sees the current
   // toggle state instead of whatever was true when the map was first built.
   const stateRef = useRef({})
-  stateRef.current = { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible }
+  stateRef.current = { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible, rgi7HkhRegionsVisible }
 
   // One-time map setup.
   useEffect(() => {
@@ -415,7 +457,7 @@ export default function MapView({
     // markers, boundaries, and ERA5 overlay survive a basemap switch.
     function addOverlayLayers() {
       if (map.getSource('hkh-boundary')) return // already (re)built for this style
-      const { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible } = stateRef.current
+      const { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible, rgi7HkhRegionsVisible } = stateRef.current
 
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
@@ -595,6 +637,7 @@ export default function MapView({
       })
 
       if (riversVisible) addRiversLayer(map, 'cluster-dots') // else: not toggled on, don't fetch until asked
+      if (rgi7HkhRegionsVisible) addRgi7HkhRegionsLayer(map, 'cluster-dots') // else: not toggled on, don't fetch until asked
     }
 
     map.on('style.load', () => {
@@ -881,6 +924,29 @@ export default function MapView({
       map.once('load', apply)
     }
   }, [riversVisible])
+
+  // RGI7 HKH glaciated-region outline -- same lazy pattern as rivers above.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const apply = () => {
+      if (map.getLayer('rgi7-hkh-regions-line')) {
+        const visibility = rgi7HkhRegionsVisible ? 'visible' : 'none'
+        map.setLayoutProperty('rgi7-hkh-regions-fill', 'visibility', visibility)
+        map.setLayoutProperty('rgi7-hkh-regions-line', 'visibility', visibility)
+        return
+      }
+      if (!rgi7HkhRegionsVisible) return // nothing to hide -- don't fetch until asked
+      addRgi7HkhRegionsLayer(map, map.getLayer('cluster-dots') ? 'cluster-dots' : undefined)
+    }
+
+    if (map.isStyleLoaded()) {
+      apply()
+    } else {
+      map.once('load', apply)
+    }
+  }, [rgi7HkhRegionsVisible])
 
   // Building footprints -- same lazy, "don't fetch until asked" pattern as
   // the Pakistan boundaries above: the ~160 district sources are only

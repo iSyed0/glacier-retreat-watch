@@ -95,6 +95,8 @@ export default function Legend({
   onToggleSensorsGmrcWapda,
   riversVisible,
   onToggleRivers,
+  rgi7HkhRegionsVisible,
+  onToggleRgi7HkhRegions,
 }) {
   const era5AnnualGradient = era5Annual ? `linear-gradient(to right, ${era5Annual.palette.map((c) => '#' + c).join(',')})` : ''
   const popRasterGradient = popRaster ? `linear-gradient(to right, ${popRaster.palette.map((c) => '#' + c).join(',')})` : ''
@@ -221,6 +223,13 @@ export default function Legend({
               label="Rivers / canals / nallas"
               checked={riversVisible}
               onChange={onToggleRivers}
+            />
+
+            <LayerRow
+              swatch={lineSwatch('#14b8a6')}
+              label="RGI7 HKH glaciated region"
+              checked={rgi7HkhRegionsVisible}
+              onChange={onToggleRgi7HkhRegions}
             />
 
             <div className="legend-group">

@@ -27,6 +27,11 @@ boundaries/Pakistan_Districts.geojson
 wgms-amce-2026-02-10/
 wgms-amce-2026-02-10.zip
 
+# Raw GTN-G global region-boundary shapefile (world, both O1 and O2 levels)
+# -- source material for rgi7/hkh_o1regions.geojson (just the 3 HKH-relevant
+# O1 polygons, already extracted); not something the running app reads.
+rgi7_regions/
+
 # OS / editor
 .DS_Store
 .vscode/*
