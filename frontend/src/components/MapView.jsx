@@ -235,6 +235,61 @@ class ZoomIndicatorControl {
   }
 }
 
+// The annual-temperature layer plays through 28 years, so a hard cut
+// between each year's imagery (the previous approach: swap one raster
+// source's tiles and it just pops) reads as choppy even though every
+// year's tile is already cached and instant to fetch -- the abruptness
+// is the problem, not latency. Fixed with two overlapping raster layers
+// instead of one: whichever is "front" shows the current year at full
+// opacity, the other sits at opacity 0 already loaded with the next
+// year's tiles, and stepping forward cross-fades between them (raster
+// layers support an opacity transition natively, so the fade itself
+// needs no manual animation loop). ERA5_ANNUAL_FADE_DELAY_MS gives the
+// hidden layer's tiles a moment to start arriving before the fade
+// starts, so it isn't fading in a still-blank layer.
+const ERA5_ANNUAL_FADE_MS = 600
+const ERA5_ANNUAL_FADE_DELAY_MS = 150
+
+function ensureEra5AnnualLayers(map, tileUrl, visible, opacity, attribution, beforeId) {
+  if (map.getSource('era5-annual-0')) return // already set up
+  for (const slot of [0, 1]) {
+    map.addSource(`era5-annual-${slot}`, {
+      type: 'raster',
+      tiles: [tileUrl],
+      tileSize: 256,
+      attribution,
+    })
+    map.addLayer({
+      id: `era5-annual-${slot}-layer`,
+      type: 'raster',
+      source: `era5-annual-${slot}`,
+      layout: { visibility: visible ? 'visible' : 'none' },
+      paint: {
+        'raster-opacity': slot === 0 ? opacity : 0,
+        'raster-opacity-transition': { duration: ERA5_ANNUAL_FADE_MS, delay: 0 },
+      },
+    }, beforeId)
+  }
+}
+
+function crossfadeEra5Annual(map, tileUrl, opacity, activeSlotRef, fadeTimeoutRef) {
+  const activeSlot = activeSlotRef.current
+  const hiddenSlot = activeSlot === 0 ? 1 : 0
+  const hiddenSource = map.getSource(`era5-annual-${hiddenSlot}`)
+  if (!hiddenSource) return
+  hiddenSource.setTiles([tileUrl])
+
+  // Cancel any still-pending fade from a step the user has already moved
+  // past (fast scrubbing), rather than letting stacked timeouts fight
+  // over which layer ends up on top.
+  if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current)
+  fadeTimeoutRef.current = setTimeout(() => {
+    map.setPaintProperty(`era5-annual-${hiddenSlot}-layer`, 'raster-opacity', opacity)
+    map.setPaintProperty(`era5-annual-${activeSlot}-layer`, 'raster-opacity', 0)
+    activeSlotRef.current = hiddenSlot
+  }, ERA5_ANNUAL_FADE_DELAY_MS)
+}
+
 export default function MapView({
   config,
   mapStyleId,
@@ -275,6 +330,15 @@ export default function MapView({
   // Ref (not a plain closure var) so the "center on HKH region" button --
   // wired up in a separate effect below -- can silence the auto-spin too.
   const spinEnabledRef = useRef(true)
+
+  // Which of the two alternating annual-temperature layers (see
+  // crossfadeEra5Annual below) is currently the visible one -- a ref, not
+  // state, since flipping it shouldn't itself trigger a re-render.
+  const era5AnnualActiveSlotRef = useRef(0)
+  // The in-flight "let tiles start loading before fading" timer, so a fast
+  // scrub through years cancels the previous step's fade instead of
+  // stacking them.
+  const era5AnnualFadeTimeoutRef = useRef(null)
 
   // Mirrored into a ref (rather than closed over) so that addOverlayLayers --
   // called fresh from 'style.load' every time the basemap switches, long
@@ -482,19 +546,8 @@ export default function MapView({
       // render below the cluster dots, which -- having just been added
       // above -- are guaranteed to exist at this point.
       if (era5AnnualTileUrl) {
-        map.addSource('era5-annual', {
-          type: 'raster',
-          tiles: [era5AnnualTileUrl],
-          tileSize: 256,
-          attribution: config.era5Annual?.attribution,
-        })
-        map.addLayer({
-          id: 'era5-annual-layer',
-          type: 'raster',
-          source: 'era5-annual',
-          layout: { visibility: era5AnnualVisible ? 'visible' : 'none' },
-          paint: { 'raster-opacity': era5AnnualOpacity },
-        }, 'cluster-dots')
+        ensureEra5AnnualLayers(map, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, config.era5Annual?.attribution, 'cluster-dots')
+        era5AnnualActiveSlotRef.current = 0 // fresh style load -- slot 0 is always the initial "front" layer
       }
 
       if (popRasterTileUrl) {
@@ -645,33 +698,21 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recenterSignal])
 
-  // Add (or swap the tile URL of) the annual-temperature raster layer
-  // whenever the selected year resolves to a fresh tile -- same pattern as
-  // the monthly ERA5 layer above.
+  // Add the two-layer setup on first use, or cross-fade to the newly
+  // selected year's tile once it's already in place -- see
+  // ensureEra5AnnualLayers/crossfadeEra5Annual above for why it's two
+  // layers instead of one.
   useEffect(() => {
     const map = mapRef.current
     if (!map || !era5AnnualTileUrl) return
 
     const apply = () => {
-      const source = map.getSource('era5-annual')
-      if (source) {
-        source.setTiles([era5AnnualTileUrl])
+      if (map.getSource('era5-annual-0')) {
+        crossfadeEra5Annual(map, era5AnnualTileUrl, era5AnnualOpacity, era5AnnualActiveSlotRef, era5AnnualFadeTimeoutRef)
         return
       }
-      map.addSource('era5-annual', {
-        type: 'raster',
-        tiles: [era5AnnualTileUrl],
-        tileSize: 256,
-        attribution: config.era5Annual?.attribution,
-      })
       const beforeId = map.getLayer('cluster-dots') ? 'cluster-dots' : undefined
-      map.addLayer({
-        id: 'era5-annual-layer',
-        type: 'raster',
-        source: 'era5-annual',
-        layout: { visibility: era5AnnualVisible ? 'visible' : 'none' },
-        paint: { 'raster-opacity': era5AnnualOpacity },
-      }, beforeId)
+      ensureEra5AnnualLayers(map, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, config.era5Annual?.attribution, beforeId)
     }
 
     if (map.isStyleLoaded()) {
@@ -682,18 +723,32 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [era5AnnualTileUrl])
 
-  // Sync annual-temperature layer visibility with the toggle.
+  // Cancel any pending cross-fade on unmount so it can't fire after the
+  // map/layers are gone.
+  useEffect(() => {
+    return () => {
+      if (era5AnnualFadeTimeoutRef.current) clearTimeout(era5AnnualFadeTimeoutRef.current)
+    }
+  }, [])
+
+  // Sync annual-temperature layer visibility with the toggle -- both
+  // layers together, regardless of which is currently the cross-fade's
+  // "front" one.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.getLayer('era5-annual-layer')) return
-    map.setLayoutProperty('era5-annual-layer', 'visibility', era5AnnualVisible ? 'visible' : 'none')
+    if (!map || !map.getLayer('era5-annual-0-layer')) return
+    const visibility = era5AnnualVisible ? 'visible' : 'none'
+    map.setLayoutProperty('era5-annual-0-layer', 'visibility', visibility)
+    map.setLayoutProperty('era5-annual-1-layer', 'visibility', visibility)
   }, [era5AnnualVisible])
 
-  // Sync annual-temperature layer opacity with the slider.
+  // Sync annual-temperature layer opacity with the slider -- only the
+  // active (front) layer's target opacity; the hidden one stays at 0
+  // until the next cross-fade.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.getLayer('era5-annual-layer')) return
-    map.setPaintProperty('era5-annual-layer', 'raster-opacity', era5AnnualOpacity)
+    if (!map || !map.getLayer('era5-annual-0-layer')) return
+    map.setPaintProperty(`era5-annual-${era5AnnualActiveSlotRef.current}-layer`, 'raster-opacity', era5AnnualOpacity)
   }, [era5AnnualOpacity])
 
   // Add the population-density raster once its tile URL resolves (a single
