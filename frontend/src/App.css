@@ -437,8 +437,13 @@
   width: 12px;
   height: 12px;
   border-radius: 2px;
-  background: rgba(255,204,0,0.15);
-  border: 1.5px solid #ffcc00;
+  /* The boundary itself renders black on the map (see MapView.jsx) for
+     contrast against light basemap imagery, but a black-on-black swatch
+     would be invisible against this panel's own dark background -- a
+     light fill keeps the icon visible while the border still shows the
+     real on-map color. */
+  background: rgba(255,255,255,0.12);
+  border: 1.5px solid #000000;
 }
 .layer-row .swatch.gradient {
   width: 22px;

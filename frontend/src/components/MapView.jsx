@@ -473,14 +473,14 @@ export default function MapView({
         type: 'fill',
         source: 'hkh-boundary',
         layout: { visibility: boundaryVisible ? 'visible' : 'none' },
-        paint: { 'fill-color': '#ffcc00', 'fill-opacity': 0.03 },
+        paint: { 'fill-color': '#000000', 'fill-opacity': 0.05 },
       })
       map.addLayer({
         id: 'hkh-boundary-line',
         type: 'line',
         source: 'hkh-boundary',
         layout: { visibility: boundaryVisible ? 'visible' : 'none' },
-        paint: { 'line-color': '#ffcc00', 'line-width': 2, 'line-opacity': 0.85 },
+        paint: { 'line-color': '#000000', 'line-width': 2, 'line-opacity': 0.9 },
       })
 
       map.addSource('glaciers', {
