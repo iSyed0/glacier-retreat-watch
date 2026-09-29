@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import './App.css'
 import MapView from './components/MapView'
 import Legend from './components/Legend'
+import AnnualTimeSlider from './components/AnnualTimeSlider'
 import DataSheet from './components/DataSheet'
 import BasemapSwitcher from './components/BasemapSwitcher'
 import TrendsPanelStats from './components/TrendsPanelStats'
@@ -19,7 +20,7 @@ const CHART_DEFS = [
     rowTitle: 'Elevation change + temperature',
     region: 'HKH region',
     title: 'Glacier change vs. temperature',
-    sub: 'HKH region · 1999–2019 (historical record)',
+    sub: 'HKH region · 1999–2019 measured, 2020–2026 WGMS AMCE update',
     scopeNote: 'every HKH glacier',
   },
   {
@@ -29,7 +30,7 @@ const CHART_DEFS = [
     rowTitle: 'Elevation change + temperature',
     region: 'Pakistan',
     title: 'Glacier change vs. temperature — Pakistan',
-    sub: 'Pakistan (HKH) · 1999–2019 (historical record)',
+    sub: 'Pakistan (HKH) · 1999–2019 measured, 2020–2026 WGMS AMCE update',
     scopeNote: 'every glacier inside Pakistan',
   },
   {
@@ -39,7 +40,7 @@ const CHART_DEFS = [
     rowTitle: 'Mass balance + temperature',
     region: 'HKH region',
     title: 'Glacier mass balance vs. temperature',
-    sub: 'HKH region · 1999–2019 (historical record)',
+    sub: 'HKH region · 1999–2019 measured, 2020–2026 WGMS AMCE update',
     scopeNote: 'every HKH glacier',
   },
   {
@@ -49,7 +50,7 @@ const CHART_DEFS = [
     rowTitle: 'Mass balance + temperature',
     region: 'Pakistan',
     title: 'Glacier mass balance vs. temperature — Pakistan',
-    sub: 'Pakistan (HKH) · 1999–2019 (historical record)',
+    sub: 'Pakistan (HKH) · 1999–2019 measured, 2020–2026 WGMS AMCE update',
     scopeNote: 'every glacier inside Pakistan',
   },
 ]
@@ -339,14 +340,7 @@ export default function App() {
           onToggleEra5Annual={setEra5AnnualVisible}
           era5AnnualOpacity={era5AnnualOpacity}
           onEra5AnnualOpacityChange={setEra5AnnualOpacity}
-          era5AnnualRange={era5AnnualRange}
           era5AnnualYear={era5AnnualYear}
-          onEra5AnnualYearChange={setEra5AnnualYear}
-          era5AnnualTile={era5AnnualTile}
-          era5AnnualStatus={era5AnnualStatus}
-          era5AnnualError={era5AnnualError}
-          era5AnnualPlaying={era5AnnualPlaying}
-          onToggleEra5AnnualPlaying={() => setEra5AnnualPlaying((p) => !p)}
           boundaryVisible={boundaryVisible}
           onToggleBoundary={setBoundaryVisible}
           pkNationalVisible={pkNationalVisible}
@@ -380,6 +374,17 @@ export default function App() {
           onToggleSensorsGmrcWapda={setSensorsGmrcWapdaVisible}
           riversVisible={riversVisible}
           onToggleRivers={setRiversVisible}
+        />
+        <AnnualTimeSlider
+          visible={era5AnnualVisible}
+          range={era5AnnualRange}
+          year={era5AnnualYear}
+          onYearChange={setEra5AnnualYear}
+          playing={era5AnnualPlaying}
+          onTogglePlaying={() => setEra5AnnualPlaying((p) => !p)}
+          tile={era5AnnualTile}
+          status={era5AnnualStatus}
+          error={era5AnnualError}
         />
         <DataSheet
           feature={selectedFeature}

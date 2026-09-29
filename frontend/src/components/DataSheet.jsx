@@ -29,7 +29,7 @@ export default function DataSheet({ feature, countryNames, onClose }) {
 
   const p = feature.properties
   const periods = parseMaybeJSON(p.p)
-  const projectedPeriods = parseMaybeJSON(p.p585)
+  const recentPeriods = parseMaybeJSON(p.pRecent)
   const massBalance = parseMaybeJSON(p.mb)
   const frontVariation = parseMaybeJSON(p.fv)
   const [lon, lat] = feature.geometry.coordinates
@@ -56,7 +56,7 @@ export default function DataSheet({ feature, countryNames, onClose }) {
   const areaStr = p.area !== null && p.area !== undefined ? p.area.toFixed(2) + ' km²' : '—'
 
   const sortedPeriods = periods && periods.length ? [...periods].sort((a, b) => a[0] - b[0]) : []
-  const sortedProjectedPeriods = projectedPeriods && projectedPeriods.length ? [...projectedPeriods].sort((a, b) => a[0] - b[0]) : []
+  const sortedRecentPeriods = recentPeriods && recentPeriods.length ? [...recentPeriods].sort((a, b) => a[0] - b[0]) : []
   const sortedMassBalance = massBalance && massBalance.length ? [...massBalance].sort((a, b) => a[0] - b[0]) : []
   const sortedFrontVariation = frontVariation && frontVariation.length ? [...frontVariation].sort((a, b) => a[0] - b[0]) : []
 
@@ -71,17 +71,17 @@ export default function DataSheet({ feature, countryNames, onClose }) {
       </div>
       <div className="ds-body">
         {badge}
-        {sortedProjectedPeriods.length > 0 && (
-          <div className="ds-proj-note">Trend, rate &amp; area below reflect the 2026 SSP5-8.5 projection, not the 1999–2019 measured baseline.</div>
+        {sortedRecentPeriods.length > 0 && (
+          <div className="ds-proj-note">Trend, rate &amp; area below reflect the 2020–2026 update, not the 1999–2019 baseline.</div>
         )}
 
         <div className="ds-stats">
           <div className="ds-stat">
-            <div className="k">Elevation change rate{sortedProjectedPeriods.length > 0 ? ' (2020–26)' : ''}</div>
+            <div className="k">Elevation change rate{sortedRecentPeriods.length > 0 ? ' (2020–26)' : ''}</div>
             <div className="v">{rateStr}</div>
           </div>
           <div className="ds-stat">
-            <div className="k">Glacier area{sortedProjectedPeriods.length > 0 ? ' (2026)' : ''}</div>
+            <div className="k">Glacier area{sortedRecentPeriods.length > 0 ? ' (2026)' : ''}</div>
             <div className="v">{areaStr}</div>
           </div>
         </div>
@@ -104,13 +104,13 @@ export default function DataSheet({ feature, countryNames, onClose }) {
           <div className="ds-empty">No satellite change data available.</div>
         )}
 
-        {sortedProjectedPeriods.length > 0 && (
+        {sortedRecentPeriods.length > 0 && (
           <>
-            <div className="ds-section-title">Projected change (SSP5-8.5 scenario)</div>
+            <div className="ds-section-title">Recent change (WGMS AMCE, Dussaillant et al. 2025)</div>
             <table className="ds-table">
               <thead><tr><th>Period</th><th>Elev. Δ</th><th>Vol. Δ</th></tr></thead>
               <tbody>
-                {sortedProjectedPeriods.map(([b, e, ec, vc], i) => (
+                {sortedRecentPeriods.map(([b, e, ec, vc], i) => (
                   <tr key={i}>
                     <td>{b}–{e}</td>
                     <td className={ec < 0 ? 'neg' : ec > 0 ? 'pos' : ''}>{ec !== null ? ec.toFixed(2) : '—'} m</td>
@@ -159,7 +159,7 @@ export default function DataSheet({ feature, countryNames, onClose }) {
         <div className="ds-footer-note">
           Source: World Glacier Monitoring Service (WGMS) Fluctuations of Glaciers Database.
           Elevation/volume change from Hugonnet et al. (2021), Nature 592, 726–731.
-          {sortedProjectedPeriods.length > 0 && ' 2020–26 figures are a regional glacier volume-projection model under the SSP5-8.5 high-emissions scenario, not a satellite measurement.'}
+          {sortedRecentPeriods.length > 0 && ' 2020–26 figures are from WGMS’s Annual Mass-Change Estimates (Dussaillant et al. 2025, ESSD), which temporally downscales the same satellite elevation-change record with in-situ field measurements rather than re-measuring it directly.'}
           {' '}Glacier ID {p.id}.
         </div>
       </div>

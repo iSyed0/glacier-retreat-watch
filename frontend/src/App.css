@@ -147,6 +147,78 @@
 #basemap-switcher button:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 #basemap-switcher button.active { color: #05131f; background: var(--accent); }
 
+/* Annual-temperature time scrubber -- bottom-center, full-width bar on the
+   map itself (see AnnualTimeSlider.jsx for why it isn't in the Legend). */
+#annual-time-slider {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 32px));
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  z-index: 6;
+  padding: 10px 16px;
+}
+.ats-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.ats-title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ats-temp {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ats-temp-error {
+  color: var(--red);
+}
+.ats-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ats-play {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ats-play:hover {
+  background: rgba(255,255,255,0.08);
+}
+.ats-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.ats-bound {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+  width: 30px;
+  text-align: center;
+}
+
 /* Legend -- freely draggable via its header, position:fixed so drag
    coordinates map 1:1 to viewport pixels regardless of ancestor layout.
    Collapses down to just its header via the chevron button. */
@@ -559,30 +631,10 @@
   color: var(--red);
 }
 
-.era5-annual-year-field .era5-opacity-value {
-  width: 34px;
-}
-.era5-annual-play {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.04);
-  color: var(--text);
+.era5-hint {
   font-size: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.era5-annual-play:hover {
-  background: rgba(255,255,255,0.08);
-}
-.era5-annual-mean {
-  font-size: 13px;
-  color: var(--text);
-  font-weight: 600;
+  color: var(--muted);
+  font-style: italic;
 }
 
 /* Floating data sheet */

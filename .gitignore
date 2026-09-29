@@ -20,6 +20,13 @@ frontend/.env
 # GitHub's 100MB per-file limit.
 boundaries/Pakistan_Districts.geojson
 
+# Raw WGMS AMCE global dataset (~470MB, ~50MB zipped) -- source material for
+# the 2020-2026 update merged into backend/data/glaciers.geojson's `pRecent`
+# field (only 3 of ~19 region files are HKH-relevant); not something the
+# running app reads directly.
+wgms-amce-2026-02-10/
+wgms-amce-2026-02-10.zip
+
 # OS / editor
 .DS_Store
 .vscode/*

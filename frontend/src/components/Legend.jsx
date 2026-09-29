@@ -72,14 +72,7 @@ export default function Legend({
   onToggleEra5Annual,
   era5AnnualOpacity,
   onEra5AnnualOpacityChange,
-  era5AnnualRange,
   era5AnnualYear,
-  onEra5AnnualYearChange,
-  era5AnnualTile,
-  era5AnnualStatus,
-  era5AnnualError,
-  era5AnnualPlaying,
-  onToggleEra5AnnualPlaying,
   boundaryVisible,
   onToggleBoundary,
   pkNationalVisible,
@@ -413,37 +406,7 @@ export default function Legend({
 
                 {era5AnnualVisible && (
                   <div id="era5-controls">
-                    {era5AnnualRange && (
-                      <div className="era5-field era5-annual-year-field">
-                        <label htmlFor="era5-annual-year">Year</label>
-                        <input
-                          id="era5-annual-year"
-                          type="range"
-                          min={era5AnnualRange.min}
-                          max={era5AnnualRange.max}
-                          step="1"
-                          value={era5AnnualYear ?? era5AnnualRange.min}
-                          onChange={(e) => onEra5AnnualYearChange(Number(e.target.value))}
-                        />
-                        <span className="era5-opacity-value">{era5AnnualYear}</span>
-                        <button
-                          type="button"
-                          className="era5-annual-play"
-                          onClick={onToggleEra5AnnualPlaying}
-                          title={era5AnnualPlaying ? 'Pause' : 'Play'}
-                        >
-                          {era5AnnualPlaying ? '⏸' : '▶'}
-                        </button>
-                      </div>
-                    )}
-
-                    {era5AnnualStatus === 'error' && (
-                      <div className="era5-error">No data for that year{era5AnnualError ? ` — ${era5AnnualError}` : ''}</div>
-                    )}
-
-                    {era5AnnualStatus === 'ready' && era5AnnualTile?.meanTempC != null && (
-                      <div className="era5-annual-mean">HKH average: {era5AnnualTile.meanTempC.toFixed(1)}°C</div>
-                    )}
+                    <div className="era5-hint">Year &amp; playback: bottom of map</div>
 
                     <div className="era5-field">
                       <label htmlFor="era5-annual-opacity">Opacity</label>
