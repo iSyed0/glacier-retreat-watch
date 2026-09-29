@@ -171,7 +171,7 @@ export default function TrendsPanelStats({
   status,
   error,
   title = 'Glacier change vs. temperature',
-  sub = 'HKH region · 1999–2019 measured, 2019–2025 WGMS AMCE update',
+  sub = 'HKH region · 1999–2019 measured, 2020–2026 WGMS AMCE update',
   scopeNote = 'every HKH glacier',
   variant = 'elevation',
 }) {
@@ -245,7 +245,7 @@ export default function TrendsPanelStats({
       tempDeltaC,
       baselineAreaKm2: first.totalAreaKm2,
       baselineCount: first.glacierCount,
-      hasRecentPeriod: last.startYear === 2019 && last.endYear === 2025,
+      hasRecentPeriod: last.startYear === 2020 && last.endYear === 2026,
     }
   }, [periods, n, metric.rateKey])
 
@@ -479,7 +479,7 @@ export default function TrendsPanelStats({
                     period, via Google Earth Engine -- the same layer as the map's
                     annual-temperature overlay, used for every period here (not just
                     the one below) so the series doesn't jump where the source changes.
-                    {stats?.hasRecentPeriod && ' The 2019–25 period comes from WGMS’s Annual Mass-Change Estimates (Dussaillant et al. 2025) rather than Hugonnet et al. (2021) directly -- real observations temporally downscaled with in-situ data, not a climate projection, covering essentially the same glacier population as the historical periods.'}
+                    {stats?.hasRecentPeriod && ' The 2020–26 period comes from WGMS’s Annual Mass-Change Estimates (Dussaillant et al. 2025) rather than Hugonnet et al. (2021) directly -- real observations temporally downscaled with in-situ data, not a climate projection, covering essentially the same glacier population as the historical periods.'}
                   </div>
                 </div>
               </div>
