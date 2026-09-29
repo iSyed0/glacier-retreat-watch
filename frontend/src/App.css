@@ -628,6 +628,14 @@
 .ds-badge.stb { background: rgba(142,163,182,0.15); color: var(--muted); }
 .ds-badge .dotmini { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 
+.ds-proj-note {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
 .ds-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
