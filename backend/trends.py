@@ -1,10 +1,12 @@
 """
-Region-wide glacier elevation-change vs. temperature trend, over the same
-four 5-year periods (1999-2019, 20 years total) that Hugonnet et al. (2021)
+Region-wide glacier elevation-change vs. temperature trend, over the four
+5-year periods (1999-2019, 20 years total) that Hugonnet et al. (2021)
 publish per-glacier elevation change for -- that's the actual resolution
 the glacier data supports (not truly annual; see backend/data/glaciers.geojson's
 `p` field), so temperature is aggregated to match rather than pretending
-either series is annual.
+either series is annual. A fifth period, 2020-2026, extends both series
+with the SSP5-8.5 volume projection (`p585`) and ERA5-Land temperature --
+see PROJECTED_PERIOD below.
 """
 
 import json
@@ -25,15 +27,23 @@ PERIODS = [(1999, 2004), (2004, 2009), (2009, 2014), (2014, 2019)]
 
 # 2020-2026 SSP5-8.5 volume-projection period, sourced from the `p585`
 # field (see the glacier-merge commit) rather than `p` -- kept out of
-# PERIODS above since it isn't a Hugonnet et al. 2021 figure, and ERA5
-# monthly (ECMWF/ERA5/MONTHLY) stops updating at 2020-06, so there's no
-# real observed temperature to pair with it (get_temperature_trend below
-# still only queries PERIODS; the join functions leave meanTempC unset
-# for this one).
+# PERIODS above since it isn't a Hugonnet et al. 2021 figure. It still
+# gets a real temperature figure from get_temperature_trend below, same
+# as the historical periods.
 PROJECTED_PERIOD = (2020, 2026)
 
-ERA5_COLLECTION_ID = "ECMWF/ERA5/MONTHLY"
-ERA5_BAND = "mean_2m_air_temperature"
+# ECMWF/ERA5/MONTHLY (the legacy collection) stopped updating at 2020-06,
+# so it can't cover PROJECTED_PERIOD. ERA5-Land is the still-updated
+# replacement (current through at least mid-2026 as of writing) -- but at
+# 0.1 degrees vs. the legacy collection's 0.25 degrees, it resolves HKH's
+# mountain terrain differently and reads about 0.75 degC cooler for the
+# same period over the same boundary. Using the legacy collection for the
+# historical periods and switching to ERA5-Land only for PROJECTED_PERIOD
+# would show up as a fake ~0.75degC "drop" right at the seam, so every
+# period is computed from ERA5-Land for consistency, not just the new one.
+ERA5_COLLECTION_ID = "ECMWF/ERA5_LAND/MONTHLY_AGGR"
+ERA5_BAND = "temperature_2m"
+ERA5_SCALE_M = 11132  # ERA5-Land's native ~0.1 degree resolution
 
 # Standard glacier-ice density assumption used to convert geodetic volume
 # change to mass change (Huss, 2013; the same value Hugonnet et al. 2021
@@ -152,13 +162,13 @@ def get_temperature_trend(country=None):
 
     coll = ee.ImageCollection(ERA5_COLLECTION_ID).select(ERA5_BAND)
     results = []
-    for start, end in PERIODS:
+    for start, end in PERIODS + [PROJECTED_PERIOD]:
         filtered = coll.filterDate(f"{start}-01-01", f"{end}-01-01")
         mean_image = filtered.mean()
         stats = mean_image.reduceRegion(
             reducer=ee.Reducer.mean(),
             geometry=boundary,
-            scale=25000,
+            scale=ERA5_SCALE_M,
             maxPixels=1e9,
             bestEffort=True,
         )
@@ -174,9 +184,10 @@ def get_temperature_trend(country=None):
 def get_trends(country=None):
     """Both series, joined period-by-period -- region-wide by default, or
     scoped to one country's glaciers + its portion of the HKH boundary.
-    Iterates over the glacier side (which now runs through PROJECTED_PERIOD)
-    rather than the temperature side, so the 2020-2026 entry still comes
-    through with meanTempC left as None instead of being dropped."""
+    Iterates over the glacier side (rather than the temperature side) so
+    that if the two ever disagree on which periods they cover, a period
+    missing from `temperature` still comes through with meanTempC set to
+    None instead of silently being dropped from the response."""
     temperature = {(t["startYear"], t["endYear"]): t["meanTempC"] for t in get_temperature_trend(country)}
     return [
         {**g, "meanTempC": temperature.get((g["startYear"], g["endYear"]))}

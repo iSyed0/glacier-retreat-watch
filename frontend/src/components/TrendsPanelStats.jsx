@@ -171,7 +171,7 @@ export default function TrendsPanelStats({
   status,
   error,
   title = 'Glacier change vs. temperature',
-  sub = 'HKH region · 1999–2019 (historical record)',
+  sub = 'HKH region · 1999–2019 measured, 2020–2026 SSP5-8.5 projection',
   scopeNote = 'every HKH glacier',
   variant = 'elevation',
 }) {
@@ -238,9 +238,8 @@ export default function TrendsPanelStats({
       0
     )
     // Temperature change uses the last period that actually has a real ERA5
-    // figure, not just periods[n-1] -- the 2020-2026 SSP585 period has none
-    // (ECMWF/ERA5/MONTHLY stops at 2020-06), so periods[n-1] would always
-    // read null once that period is present.
+    // figure, not just periods[n-1] -- defensive fallback in case a period
+    // is ever added without one; every current period has a real figure.
     const firstWithTemp = periods.find((p) => p.meanTempC != null)
     const lastWithTemp = [...periods].reverse().find((p) => p.meanTempC != null)
     const tempDeltaC = firstWithTemp && lastWithTemp && firstWithTemp !== lastWithTemp
@@ -254,7 +253,7 @@ export default function TrendsPanelStats({
       tempSpanLabel: firstWithTemp && lastWithTemp ? `${firstWithTemp.startYear}–${lastWithTemp.endYear}` : `${first.startYear}–${last.endYear}`,
       baselineAreaKm2: first.totalAreaKm2,
       baselineCount: first.glacierCount,
-      hasProjectedPeriod: last.startYear === 2020 && last.meanTempC == null,
+      hasProjectedPeriod: last.startYear === 2020 && last.endYear === 2026,
     }
   }, [periods, n, metric.rateKey])
 
@@ -483,10 +482,13 @@ export default function TrendsPanelStats({
                   </table>
 
                   <div className="ds-footer-note">
-                    {metric.methodNote(scopeNote)} Temperature: ERA5
-                    monthly reanalysis (ECMWF), averaged over the same region for each
-                    period, via Google Earth Engine.
-                    {stats?.hasProjectedPeriod && ' The 2020–26 period is a regional SSP5-8.5 volume-projection model covering only the glaciers matched to it (see that period’s glacier count above) -- a smaller, geographically narrower sample than the historical periods, so treat it as directional rather than a like-for-like total. No ERA5 figure is available that far forward (the collection stops at 2020-06), hence the blank temperature reading.'}
+                    {metric.methodNote(scopeNote)} Temperature: ERA5-Land monthly
+                    aggregates (ECMWF), averaged over the same region for each
+                    period, via Google Earth Engine -- used in place of the legacy
+                    ERA5 monthly collection (which stops updating in mid-2020) so
+                    every period, including the projection below, comes from one
+                    consistent temperature source.
+                    {stats?.hasProjectedPeriod && ' The 2020–26 period is a regional SSP5-8.5 volume-projection model covering only the glaciers matched to it (see that period’s glacier count above) -- a smaller, geographically narrower sample than the historical periods, so treat its elevation/mass figure as directional rather than a like-for-like total; the temperature figure for that period is a real ERA5-Land reading, not projected.'}
                   </div>
                 </div>
               </div>
