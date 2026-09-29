@@ -56,12 +56,12 @@ function CrosshairIcon() {
 
 export default function Legend({
   onRecenter,
-  era5Periods,
-  era5PeriodsVisible,
-  onToggleEra5Periods,
-  era5PeriodsOpacity,
-  onEra5PeriodsOpacityChange,
-  currentPeriod,
+  era5Annual,
+  era5AnnualVisible,
+  onToggleEra5Annual,
+  era5AnnualOpacity,
+  onEra5AnnualOpacityChange,
+  era5AnnualYear,
   boundaryVisible,
   onToggleBoundary,
   pkNationalVisible,
@@ -96,7 +96,7 @@ export default function Legend({
   riversVisible,
   onToggleRivers,
 }) {
-  const era5PeriodsGradient = era5Periods ? `linear-gradient(to right, ${era5Periods.palette.map((c) => '#' + c).join(',')})` : ''
+  const era5AnnualGradient = era5Annual ? `linear-gradient(to right, ${era5Annual.palette.map((c) => '#' + c).join(',')})` : ''
   const popRasterGradient = popRaster ? `linear-gradient(to right, ${popRaster.palette.map((c) => '#' + c).join(',')})` : ''
 
   const panelRef = useRef(null)
@@ -322,38 +322,38 @@ export default function Legend({
               </>
             )}
 
-            {era5Periods && (
+            {era5Annual && (
               <>
                 <LayerRow
-                  swatch={<span className="swatch gradient" style={{ background: era5PeriodsGradient }} />}
-                  label={`Temp + glacier retreat${currentPeriod ? ` (${currentPeriod.startYear}–${currentPeriod.endYear})` : ''}`}
-                  checked={era5PeriodsVisible}
-                  onChange={onToggleEra5Periods}
+                  swatch={<span className="swatch gradient" style={{ background: era5AnnualGradient }} />}
+                  label={`Annual temp (2m${era5AnnualYear != null ? `, ${era5AnnualYear}` : ''})`}
+                  checked={era5AnnualVisible}
+                  onChange={onToggleEra5Annual}
                 />
 
-                {era5PeriodsVisible && (
+                {era5AnnualVisible && (
                   <div id="era5-controls">
-                    <div className="era5-hint">Period &amp; playback: bottom of map</div>
+                    <div className="era5-hint">Year &amp; playback: bottom of map</div>
 
                     <div className="era5-field">
-                      <label htmlFor="era5-periods-opacity">Opacity</label>
+                      <label htmlFor="era5-annual-opacity">Opacity</label>
                       <input
-                        id="era5-periods-opacity"
+                        id="era5-annual-opacity"
                         type="range"
                         min="0"
                         max="1"
                         step="0.05"
-                        value={era5PeriodsOpacity}
-                        onChange={(e) => onEra5PeriodsOpacityChange(Number(e.target.value))}
+                        value={era5AnnualOpacity}
+                        onChange={(e) => onEra5AnnualOpacityChange(Number(e.target.value))}
                       />
-                      <span className="era5-opacity-value">{Math.round(era5PeriodsOpacity * 100)}%</span>
+                      <span className="era5-opacity-value">{Math.round(era5AnnualOpacity * 100)}%</span>
                     </div>
 
                     <div id="era5-scale">
-                      <div className="era5-scale-bar" style={{ background: era5PeriodsGradient }} />
+                      <div className="era5-scale-bar" style={{ background: era5AnnualGradient }} />
                       <div className="era5-scale-labels">
-                        <span>{era5Periods.minC}°C</span>
-                        <span>{era5Periods.maxC}°C</span>
+                        <span>{era5Annual.minC}°C</span>
+                        <span>{era5Annual.maxC}°C</span>
                       </div>
                     </div>
                   </div>

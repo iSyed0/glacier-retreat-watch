@@ -238,10 +238,9 @@ class ZoomIndicatorControl {
 export default function MapView({
   config,
   mapStyleId,
-  era5PeriodsVisible,
-  era5PeriodsOpacity,
-  era5PeriodsTileUrl,
-  periodIndex,
+  era5AnnualVisible,
+  era5AnnualOpacity,
+  era5AnnualTileUrl,
   boundaryVisible,
   pkNationalVisible,
   pkProvincesVisible,
@@ -282,7 +281,7 @@ export default function MapView({
   // after the mount effect's closure was created -- always sees the current
   // toggle state instead of whatever was true when the map was first built.
   const stateRef = useRef({})
-  stateRef.current = { boundaryVisible, pkVisible, era5PeriodsTileUrl, era5PeriodsVisible, era5PeriodsOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible }
+  stateRef.current = { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible }
 
   // One-time map setup.
   useEffect(() => {
@@ -352,7 +351,7 @@ export default function MapView({
     // markers, boundaries, and ERA5 overlay survive a basemap switch.
     function addOverlayLayers() {
       if (map.getSource('hkh-boundary')) return // already (re)built for this style
-      const { boundaryVisible, pkVisible, era5PeriodsTileUrl, era5PeriodsVisible, era5PeriodsOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible } = stateRef.current
+      const { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible } = stateRef.current
 
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
@@ -375,27 +374,16 @@ export default function MapView({
         paint: { 'line-color': '#ffcc00', 'line-width': 2, 'line-opacity': 0.85 },
       })
 
-      // dec/inc are the all-time split; decP0/incP0..decP4/incP4 are the
-      // same count per period (see the glacier-merge script's trendP0..
-      // trendP4) -- computed once here, all of them, rather than rebuilding
-      // this clustered source every time the period slider moves, which
-      // would mean reprocessing all 38k features on every step.
-      const clusterProperties = {
-        dec: ['+', ['case', ['==', ['get', 'trend'], -1], 1, 0]],
-        inc: ['+', ['case', ['==', ['get', 'trend'], 1], 1, 0]],
-      }
-      for (let i = 0; i < 5; i++) {
-        clusterProperties[`decP${i}`] = ['+', ['case', ['==', ['get', `trendP${i}`], -1], 1, 0]]
-        clusterProperties[`incP${i}`] = ['+', ['case', ['==', ['get', `trendP${i}`], 1], 1, 0]]
-      }
-
       map.addSource('glaciers', {
         type: 'geojson',
         data: '/api/glaciers',
         cluster: true,
         clusterRadius: 45,
         clusterMaxZoom: 8,
-        clusterProperties,
+        clusterProperties: {
+          dec: ['+', ['case', ['==', ['get', 'trend'], -1], 1, 0]],
+          inc: ['+', ['case', ['==', ['get', 'trend'], 1], 1, 0]],
+        },
       })
 
       const decRatio = ['/', ['get', 'dec'], ['get', 'point_count']]
@@ -493,19 +481,19 @@ export default function MapView({
       // The annual-temperature raster + Pakistan admin boundaries both
       // render below the cluster dots, which -- having just been added
       // above -- are guaranteed to exist at this point.
-      if (era5PeriodsTileUrl) {
-        map.addSource('era5-periods', {
+      if (era5AnnualTileUrl) {
+        map.addSource('era5-annual', {
           type: 'raster',
-          tiles: [era5PeriodsTileUrl],
+          tiles: [era5AnnualTileUrl],
           tileSize: 256,
-          attribution: config.era5Periods?.attribution,
+          attribution: config.era5Annual?.attribution,
         })
         map.addLayer({
-          id: 'era5-periods-layer',
+          id: 'era5-annual-layer',
           type: 'raster',
-          source: 'era5-periods',
-          layout: { visibility: era5PeriodsVisible ? 'visible' : 'none' },
-          paint: { 'raster-opacity': era5PeriodsOpacity },
+          source: 'era5-annual',
+          layout: { visibility: era5AnnualVisible ? 'visible' : 'none' },
+          paint: { 'raster-opacity': era5AnnualOpacity },
         }, 'cluster-dots')
       }
 
@@ -662,27 +650,27 @@ export default function MapView({
   // the monthly ERA5 layer above.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !era5PeriodsTileUrl) return
+    if (!map || !era5AnnualTileUrl) return
 
     const apply = () => {
-      const source = map.getSource('era5-periods')
+      const source = map.getSource('era5-annual')
       if (source) {
-        source.setTiles([era5PeriodsTileUrl])
+        source.setTiles([era5AnnualTileUrl])
         return
       }
-      map.addSource('era5-periods', {
+      map.addSource('era5-annual', {
         type: 'raster',
-        tiles: [era5PeriodsTileUrl],
+        tiles: [era5AnnualTileUrl],
         tileSize: 256,
-        attribution: config.era5Periods?.attribution,
+        attribution: config.era5Annual?.attribution,
       })
       const beforeId = map.getLayer('cluster-dots') ? 'cluster-dots' : undefined
       map.addLayer({
-        id: 'era5-periods-layer',
+        id: 'era5-annual-layer',
         type: 'raster',
-        source: 'era5-periods',
-        layout: { visibility: era5PeriodsVisible ? 'visible' : 'none' },
-        paint: { 'raster-opacity': era5PeriodsOpacity },
+        source: 'era5-annual',
+        layout: { visibility: era5AnnualVisible ? 'visible' : 'none' },
+        paint: { 'raster-opacity': era5AnnualOpacity },
       }, beforeId)
     }
 
@@ -692,60 +680,21 @@ export default function MapView({
       map.once('load', apply)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [era5PeriodsTileUrl])
+  }, [era5AnnualTileUrl])
 
   // Sync annual-temperature layer visibility with the toggle.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.getLayer('era5-periods-layer')) return
-    map.setLayoutProperty('era5-periods-layer', 'visibility', era5PeriodsVisible ? 'visible' : 'none')
-  }, [era5PeriodsVisible])
+    if (!map || !map.getLayer('era5-annual-layer')) return
+    map.setLayoutProperty('era5-annual-layer', 'visibility', era5AnnualVisible ? 'visible' : 'none')
+  }, [era5AnnualVisible])
 
-  // Sync period-temperature layer opacity with the slider.
+  // Sync annual-temperature layer opacity with the slider.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.getLayer('era5-periods-layer')) return
-    map.setPaintProperty('era5-periods-layer', 'raster-opacity', era5PeriodsOpacity)
-  }, [era5PeriodsOpacity])
-
-  // Recolor individual glacier dots (and their blinking outlines), plus
-  // the zoomed-out cluster bubbles' rings, by the selected period's own
-  // change, in place of their normal all-time trend -- and revert the
-  // moment the period-temperature layer is switched off, rather than
-  // leaving the map "stuck" on whichever period was last viewed. Each
-  // glacier carries a flat trendP0..trendP4 property per period (see the
-  // glacier-merge script) alongside its all-time `trend`, precomputed
-  // rather than derived from the `p`/`pRecent` arrays at style-time,
-  // since Mapbox expressions can't usefully index into nested per-feature
-  // arrays; clusters get the equivalent decP0/incP0..decP4/incP4 cluster
-  // properties, computed once when the source loads (see addOverlayLayers
-  // above) rather than rebuilt per period, which would mean reclustering
-  // all 38k features on every slider step.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-
-    const apply = () => {
-      if (!map.getLayer('glacier-dots')) return
-
-      const active = era5PeriodsVisible && periodIndex != null
-      const trendProp = active ? `trendP${periodIndex}` : 'trend'
-      const decProp = active ? `decP${periodIndex}` : 'dec'
-
-      map.setPaintProperty('glacier-dots', 'circle-color', ['match', ['get', trendProp], -1, '#ff3b30', 1, '#5ec8ff', '#ffffff'])
-      map.setFilter('glacier-outline-decreasing', ['all', ['!', ['has', 'point_count']], ['==', ['get', trendProp], -1]])
-      map.setFilter('glacier-outline-increasing', ['all', ['!', ['has', 'point_count']], ['==', ['get', trendProp], 1]])
-
-      const decRatio = ['/', ['get', decProp], ['get', 'point_count']]
-      map.setPaintProperty('cluster-outline', 'circle-stroke-color', ['step', decRatio, '#5ec8ff', 0.4, '#8ea3b6', 0.6, '#ff3b30'])
-    }
-
-    if (map.isStyleLoaded() && map.getLayer('glacier-dots')) {
-      apply()
-    } else {
-      map.once('load', apply)
-    }
-  }, [era5PeriodsVisible, periodIndex])
+    if (!map || !map.getLayer('era5-annual-layer')) return
+    map.setPaintProperty('era5-annual-layer', 'raster-opacity', era5AnnualOpacity)
+  }, [era5AnnualOpacity])
 
   // Add the population-density raster once its tile URL resolves (a single
   // fetch, unlike ERA5's per-month tile -- see App.jsx) -- same pattern as

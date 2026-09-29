@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 import buildings
-import era5_periods
+import era5_annual
 import population_raster
 import trends
 
@@ -67,16 +67,15 @@ COUNTRY_NAMES = {
     "TJ": "Tajikistan",
 }
 
-# Mean 2m air temperature per period, ERA5-Land -- the period-slider layer
-# (see era5_periods.py), originally a year slider ported from a GEE Code
-# Editor script before switching to the same 5 periods as the rest of the
-# app. Static display config; the periods/tiles themselves come from
-# /api/era5-periods/list and /api/era5-periods/tiles.
-ERA5_PERIODS_LAYER = {
+# Annual mean 2m air temperature, 1999-2026, ERA5-Land -- the year-slider
+# layer ported from the GEE Code Editor script (see era5_annual.py). Static
+# display config; the year range/tiles themselves come from
+# /api/era5-annual/range and /api/era5-annual/tiles.
+ERA5_ANNUAL_LAYER = {
     "attribution": "ERA5-Land (ECMWF) via Google Earth Engine",
-    "minC": era5_periods.VIS_PARAMS["min"],
-    "maxC": era5_periods.VIS_PARAMS["max"],
-    "palette": era5_periods.VIS_PARAMS["palette"],
+    "minC": era5_annual.VIS_PARAMS["min"],
+    "maxC": era5_annual.VIS_PARAMS["max"],
+    "palette": era5_annual.VIS_PARAMS["palette"],
 }
 
 # Gridded population density, HKH-cropped -- a single 2020 snapshot (CIESIN
@@ -124,7 +123,7 @@ def health():
 def config():
     return {
         "countryNames": COUNTRY_NAMES,
-        "era5Periods": ERA5_PERIODS_LAYER,
+        "era5Annual": ERA5_ANNUAL_LAYER,
         "populationRaster": POPULATION_RASTER_LAYER,
         "mapCenter": [82.5, 32.0],
         "mapZoom": 2.5,
@@ -246,24 +245,22 @@ def glacier_mass_balance_trends_pakistan():
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
 
 
-@app.get("/api/era5-periods/list")
-def era5_periods_list():
-    """The 5 period boundaries the map's period slider steps through --
-    see periods.ALL_PERIODS."""
-    return era5_periods.get_periods()
+@app.get("/api/era5-annual/range")
+def era5_annual_range():
+    """The earliest/latest years the annual temperature layer will query."""
+    return era5_annual.get_year_range()
 
 
-@app.get("/api/era5-periods/tiles")
-def era5_periods_tiles():
-    """Every period's tile in one response (see era5_periods.get_all_tiles)
-    -- the frontend fetches this once up front rather than one request per
-    step as the slider moves, which was slow and race-prone enough
-    per-year in this layer's original year-slider design that playback
-    visibly lagged and could momentarily show a year the user had already
-    scrubbed past."""
+@app.get("/api/era5-annual/tiles")
+def era5_annual_tiles():
+    """Every year's tile in one response (see era5_annual.get_all_tiles) --
+    the frontend fetches this once up front rather than one request per
+    year as the slider moves, which was slow and race-prone enough
+    per-year that playback visibly lagged and could momentarily show a
+    year the user had already scrubbed past."""
     try:
-        return era5_periods.get_all_tiles()
-    except era5_periods.Era5PeriodsUnavailable as exc:
+        return era5_annual.get_all_tiles()
+    except era5_annual.Era5AnnualUnavailable as exc:
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
 
 
