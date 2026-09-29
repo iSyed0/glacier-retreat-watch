@@ -62,19 +62,12 @@ export default function App() {
   const [mapStyleId, setMapStyleId] = useState(DEFAULT_MAP_STYLE_ID)
   const [recenterSignal, setRecenterSignal] = useState(0)
 
-  const [era5Visible, setEra5Visible] = useState(false)
-  const [era5Opacity, setEra5Opacity] = useState(0.65)
-  const [era5Range, setEra5Range] = useState(null) // { min: 'YYYY-MM', max: 'YYYY-MM' }
-  const [era5Month, setEra5Month] = useState('') // the month the user has selected, 'YYYY-MM'
-  const [era5Tile, setEra5Tile] = useState(null) // { tileUrlTemplate, date }
-  const [era5Status, setEra5Status] = useState('idle') // idle | loading | ready | error
-  const [era5Error, setEra5Error] = useState('')
   const [era5AnnualVisible, setEra5AnnualVisible] = useState(false)
   const [era5AnnualOpacity, setEra5AnnualOpacity] = useState(0.65)
   const [era5AnnualRange, setEra5AnnualRange] = useState(null) // { min: 1999, max: 2026 }
   const [era5AnnualYear, setEra5AnnualYear] = useState(null) // the year the user has selected
-  const [era5AnnualTile, setEra5AnnualTile] = useState(null) // { tileUrlTemplate, year, meanTempC }
-  const [era5AnnualStatus, setEra5AnnualStatus] = useState('idle') // idle | loading | ready | error
+  const [era5AnnualTiles, setEra5AnnualTiles] = useState({}) // year -> { tileUrlTemplate, year, meanTempC }, all fetched in one batch
+  const [era5AnnualStatus, setEra5AnnualStatus] = useState('idle') // idle | loading | ready | error -- for the one-time batch fetch, not per-year
   const [era5AnnualError, setEra5AnnualError] = useState('')
   const [era5AnnualPlaying, setEra5AnnualPlaying] = useState(false)
   const [boundaryVisible, setBoundaryVisible] = useState(true)
@@ -152,44 +145,6 @@ export default function App() {
       })
   }, [])
 
-  // Find out which months are actually queryable, then default to the most recent.
-  useEffect(() => {
-    fetch('/api/era5/range')
-      .then((r) => {
-        if (!r.ok) throw new Error(`range request failed (${r.status})`)
-        return r.json()
-      })
-      .then((range) => {
-        setEra5Range(range)
-        setEra5Month(range.max)
-      })
-      .catch((err) => setEra5Error(err.message))
-  }, [])
-
-  // Fetch a fresh tile whenever the selected month changes.
-  useEffect(() => {
-    if (!era5Month) return
-    const [year, month] = era5Month.split('-').map(Number)
-    setEra5Status('loading')
-    setEra5Error('')
-    fetch(`/api/era5/tile?year=${year}&month=${month}`)
-      .then(async (r) => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}))
-          throw new Error(body.detail || `request failed (${r.status})`)
-        }
-        return r.json()
-      })
-      .then((tile) => {
-        setEra5Tile(tile)
-        setEra5Status('ready')
-      })
-      .catch((err) => {
-        setEra5Status('error')
-        setEra5Error(err.message)
-      })
-  }, [era5Month])
-
   // Find out which years the annual layer covers, then default to the
   // earliest (matching the GEE script this layer was ported from, which
   // opens on 1999 rather than the most recent year).
@@ -206,12 +161,17 @@ export default function App() {
       .catch((err) => setEra5AnnualError(err.message))
   }, [])
 
-  // Fetch a fresh tile whenever the selected year changes.
+  // Fetch every year's tile in one batch, the first time the layer is
+  // switched on -- not one request per year as the slider moves. Each
+  // year is a real Earth Engine round trip, so per-year fetching was slow
+  // enough that scrubbing/playing visibly lagged, and a fetch for a year
+  // the user had already moved past could still resolve and briefly show
+  // stale imagery. era5AnnualStatus stays 'idle' until this fires, so the
+  // guard below only lets it run once.
   useEffect(() => {
-    if (era5AnnualYear == null) return
+    if (!era5AnnualVisible || era5AnnualStatus !== 'idle') return
     setEra5AnnualStatus('loading')
-    setEra5AnnualError('')
-    fetch(`/api/era5-annual/tile?year=${era5AnnualYear}`)
+    fetch('/api/era5-annual/tiles')
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}))
@@ -219,21 +179,23 @@ export default function App() {
         }
         return r.json()
       })
-      .then((tile) => {
-        setEra5AnnualTile(tile)
+      .then((tiles) => {
+        setEra5AnnualTiles(Object.fromEntries(tiles.map((t) => [t.year, t])))
         setEra5AnnualStatus('ready')
       })
       .catch((err) => {
         setEra5AnnualStatus('error')
         setEra5AnnualError(err.message)
       })
-  }, [era5AnnualYear])
+  }, [era5AnnualVisible, era5AnnualStatus])
 
   // Play/pause: advance one year at a time on a fixed interval (matching
   // the 1200ms cadence of the GEE script this was ported from), stopping
-  // automatically at the last year rather than looping.
+  // automatically at the last year rather than looping. Gated on the batch
+  // fetch above being done -- every year is instant once it is, so there's
+  // no per-frame loading state to juggle during playback.
   useEffect(() => {
-    if (!era5AnnualPlaying || !era5AnnualRange) return
+    if (!era5AnnualPlaying || !era5AnnualRange || era5AnnualStatus !== 'ready') return
     const id = setInterval(() => {
       setEra5AnnualYear((y) => {
         const next = y + 1
@@ -245,7 +207,7 @@ export default function App() {
       })
     }, 1200)
     return () => clearInterval(id)
-  }, [era5AnnualPlaying, era5AnnualRange])
+  }, [era5AnnualPlaying, era5AnnualRange, era5AnnualStatus])
 
   // Fetch a chart's data the first time it's opened, not on mount -- these
   // are real Earth Engine + local-computation calls on the backend, worth
@@ -275,6 +237,10 @@ export default function App() {
 
   const closeChart = (key) => setCharts((prev) => ({ ...prev, [key]: { ...prev[key], open: false } }))
 
+  // The current year's entry out of the batch fetched above -- looked up,
+  // not fetched, so selecting/scrubbing/playing a year is instant.
+  const era5AnnualTile = era5AnnualYear != null ? era5AnnualTiles[era5AnnualYear] || null : null
+
   return (
     <div id="app">
       <div id="topbar">
@@ -293,9 +259,6 @@ export default function App() {
         <MapView
           config={config}
           mapStyleId={mapStyleId}
-          era5Visible={era5Visible}
-          era5Opacity={era5Opacity}
-          era5TileUrl={era5Tile?.tileUrlTemplate || null}
           era5AnnualVisible={era5AnnualVisible}
           era5AnnualOpacity={era5AnnualOpacity}
           era5AnnualTileUrl={era5AnnualTile?.tileUrlTemplate || null}
@@ -324,17 +287,6 @@ export default function App() {
         <BasemapSwitcher styleId={mapStyleId} onChange={setMapStyleId} />
         <Legend
           onRecenter={() => setRecenterSignal((n) => n + 1)}
-          era5={config?.era5}
-          era5Visible={era5Visible}
-          onToggleEra5={setEra5Visible}
-          era5Opacity={era5Opacity}
-          onOpacityChange={setEra5Opacity}
-          era5Range={era5Range}
-          era5Month={era5Month}
-          onMonthChange={setEra5Month}
-          era5Date={era5Tile?.date}
-          era5Status={era5Status}
-          era5Error={era5Error}
           era5Annual={config?.era5Annual}
           era5AnnualVisible={era5AnnualVisible}
           onToggleEra5Annual={setEra5AnnualVisible}

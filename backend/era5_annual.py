@@ -7,6 +7,7 @@ asset from the one era5.py/population_raster.py use -- see earth_engine.py),
 matching the GEE Code Editor script this was ported from.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
 import ee
@@ -90,3 +91,21 @@ def get_tile_for_year(year: int):
         "year": year,
         "meanTempC": area_mean,
     }
+
+
+@lru_cache(maxsize=1)
+def get_all_tiles():
+    """Every year's tile in one call, computed concurrently -- the frontend
+    fetches this once (see AnnualTimeSlider.jsx) instead of one request per
+    year as the slider moves, which was slow enough per-year (each is a
+    real Earth Engine round trip) that scrubbing/playing the slider visibly
+    lagged and, worse, could apply an in-flight response for a year the
+    user had already moved past. A thread pool is enough to parallelize
+    this even though the underlying ee calls are synchronous: each is
+    I/O-bound (waiting on Earth Engine's API), so the GIL releases while
+    one thread's request is in flight and others can proceed. Cached for
+    the life of the process, same as population_raster.get_tile()."""
+    years = range(MIN_YEAR, MAX_YEAR + 1)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(get_tile_for_year, years))
+    return [r for r in results if r is not None]

@@ -205,6 +205,10 @@
 .ats-play:hover {
   background: rgba(255,255,255,0.08);
 }
+.ats-play:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .ats-slider {
   flex: 1;
   min-width: 0;

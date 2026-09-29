@@ -4,6 +4,11 @@
 // didn't fit and silently clipped (see git history). The Legend still owns
 // the layer's on/off toggle, opacity and color scale, matching every other
 // raster layer -- this bar only owns the "which year" control.
+//
+// Every year's tile is fetched in one batch as soon as the layer is
+// switched on (see App.jsx), not one request per year as the slider
+// moves -- so `status` here is that one-time batch fetch, not a per-frame
+// loading state. Once it's 'ready', scrubbing/playing is instant.
 export default function AnnualTimeSlider({
   visible,
   range,
@@ -17,12 +22,16 @@ export default function AnnualTimeSlider({
 }) {
   if (!visible || !range || year == null) return null
 
+  const loading = status === 'loading'
+
   return (
     <div id="annual-time-slider">
       <div className="ats-top">
         <span className="ats-title">Annual temperature (2m) &middot; {year}</span>
         {status === 'error' ? (
-          <span className="ats-temp ats-temp-error">No data{error ? ` — ${error}` : ''}</span>
+          <span className="ats-temp ats-temp-error">Unavailable{error ? ` — ${error}` : ''}</span>
+        ) : loading ? (
+          <span className="ats-temp">Loading all years…</span>
         ) : (
           <span className="ats-temp">
             HKH average: {tile?.meanTempC != null ? `${tile.meanTempC.toFixed(1)}°C` : '…'}
@@ -34,6 +43,7 @@ export default function AnnualTimeSlider({
           type="button"
           className="ats-play"
           onClick={onTogglePlaying}
+          disabled={loading}
           title={playing ? 'Pause' : 'Play'}
           aria-label={playing ? 'Pause' : 'Play'}
         >

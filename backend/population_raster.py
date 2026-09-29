@@ -1,7 +1,7 @@
 """
 Gridded population density (people/km^2), HKH-cropped, live from Google
-Earth Engine -- same service account as era5.py, via the shared
-earth_engine module. Unlike ERA5 there's no month parameter: CIESIN's
+Earth Engine -- same service account as era5_annual.py, via the shared
+earth_engine module. There's no month/year parameter here: CIESIN's
 GPWv4.11 only publishes one image per 5-year interval (2000/05/10/15/20),
 so this always serves the most recent (2020).
 """

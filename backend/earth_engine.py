@@ -1,6 +1,7 @@
 """
-Shared Google Earth Engine service-account setup. Used by era5.py (monthly
-temperature) and population_raster.py (population density) -- factored out
+Shared Google Earth Engine service-account setup. Used by era5_annual.py
+(annual temperature), population_raster.py (population density), and
+trends.py (temperature series for the Trends+ charts) -- factored out
 here once a second EE-backed raster needed the same init/boundary logic.
 """
 

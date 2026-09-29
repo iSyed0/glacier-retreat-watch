@@ -238,9 +238,6 @@ class ZoomIndicatorControl {
 export default function MapView({
   config,
   mapStyleId,
-  era5Visible,
-  era5Opacity,
-  era5TileUrl,
   era5AnnualVisible,
   era5AnnualOpacity,
   era5AnnualTileUrl,
@@ -284,7 +281,7 @@ export default function MapView({
   // after the mount effect's closure was created -- always sees the current
   // toggle state instead of whatever was true when the map was first built.
   const stateRef = useRef({})
-  stateRef.current = { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible }
+  stateRef.current = { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible }
 
   // One-time map setup.
   useEffect(() => {
@@ -354,7 +351,7 @@ export default function MapView({
     // markers, boundaries, and ERA5 overlay survive a basemap switch.
     function addOverlayLayers() {
       if (map.getSource('hkh-boundary')) return // already (re)built for this style
-      const { boundaryVisible, pkVisible, era5TileUrl, era5Visible, era5Opacity, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible } = stateRef.current
+      const { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, sensorsVisible, riversVisible } = stateRef.current
 
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
@@ -481,25 +478,9 @@ export default function MapView({
         },
       })
 
-      // ERA5 raster + Pakistan admin boundaries both render below the
-      // cluster dots, which -- having just been added above -- are
-      // guaranteed to exist at this point.
-      if (era5TileUrl) {
-        map.addSource('era5-temp', {
-          type: 'raster',
-          tiles: [era5TileUrl],
-          tileSize: 256,
-          attribution: config.era5?.attribution,
-        })
-        map.addLayer({
-          id: 'era5-temp-layer',
-          type: 'raster',
-          source: 'era5-temp',
-          layout: { visibility: era5Visible ? 'visible' : 'none' },
-          paint: { 'raster-opacity': era5Opacity },
-        }, 'cluster-dots')
-      }
-
+      // The annual-temperature raster + Pakistan admin boundaries both
+      // render below the cluster dots, which -- having just been added
+      // above -- are guaranteed to exist at this point.
       if (era5AnnualTileUrl) {
         map.addSource('era5-annual', {
           type: 'raster',
@@ -663,57 +644,6 @@ export default function MapView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recenterSignal])
-
-  // Add (or swap the tile URL of) the ERA5 raster layer whenever the
-  // selected month resolves to a fresh tile. Placed below the glacier
-  // marker layers so pins stay on top.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !era5TileUrl) return
-
-    const apply = () => {
-      const source = map.getSource('era5-temp')
-      if (source) {
-        source.setTiles([era5TileUrl])
-        return
-      }
-      map.addSource('era5-temp', {
-        type: 'raster',
-        tiles: [era5TileUrl],
-        tileSize: 256,
-        attribution: config.era5.attribution,
-      })
-      const beforeId = map.getLayer('cluster-dots') ? 'cluster-dots' : undefined
-      map.addLayer({
-        id: 'era5-temp-layer',
-        type: 'raster',
-        source: 'era5-temp',
-        layout: { visibility: era5Visible ? 'visible' : 'none' },
-        paint: { 'raster-opacity': era5Opacity },
-      }, beforeId)
-    }
-
-    if (map.isStyleLoaded()) {
-      apply()
-    } else {
-      map.once('load', apply)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [era5TileUrl])
-
-  // Sync ERA5 layer visibility with the toggle.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !map.getLayer('era5-temp-layer')) return
-    map.setLayoutProperty('era5-temp-layer', 'visibility', era5Visible ? 'visible' : 'none')
-  }, [era5Visible])
-
-  // Sync ERA5 layer opacity with the slider.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || !map.getLayer('era5-temp-layer')) return
-    map.setPaintProperty('era5-temp-layer', 'raster-opacity', era5Opacity)
-  }, [era5Opacity])
 
   // Add (or swap the tile URL of) the annual-temperature raster layer
   // whenever the selected year resolves to a fresh tile -- same pattern as

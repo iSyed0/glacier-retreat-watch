@@ -56,17 +56,6 @@ function CrosshairIcon() {
 
 export default function Legend({
   onRecenter,
-  era5,
-  era5Visible,
-  onToggleEra5,
-  era5Opacity,
-  onOpacityChange,
-  era5Range,
-  era5Month,
-  onMonthChange,
-  era5Date,
-  era5Status,
-  era5Error,
   era5Annual,
   era5AnnualVisible,
   onToggleEra5Annual,
@@ -107,7 +96,6 @@ export default function Legend({
   riversVisible,
   onToggleRivers,
 }) {
-  const gradient = era5 ? `linear-gradient(to right, ${era5.palette.map((c) => '#' + c).join(',')})` : ''
   const era5AnnualGradient = era5Annual ? `linear-gradient(to right, ${era5Annual.palette.map((c) => '#' + c).join(',')})` : ''
   const popRasterGradient = popRaster ? `linear-gradient(to right, ${popRaster.palette.map((c) => '#' + c).join(',')})` : ''
 
@@ -170,12 +158,6 @@ export default function Legend({
   }
 
   const panelStyle = pos ? { left: pos.left, top: pos.top, bottom: 'auto', right: 'auto' } : undefined
-
-  const monthLabel = era5Status === 'loading'
-    ? 'loading…'
-    : era5Status === 'error'
-      ? 'unavailable'
-      : era5Date || era5Month
 
   const lineSwatch = (color) => <span className="swatch line" style={{ background: color }} />
   const dotSwatch = (color) => <span className="swatch dot-color" style={{ background: color + '33', borderColor: color }} />
@@ -333,61 +315,6 @@ export default function Legend({
                       <div className="era5-scale-labels">
                         <span>0</span>
                         <span>{popRaster.maxDensity.toLocaleString()}+ /km²</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {era5 && (
-              <>
-                <LayerRow
-                  swatch={<span className="swatch gradient" style={{ background: gradient }} />}
-                  label={`ERA5 temp (2m${monthLabel ? `, ${monthLabel}` : ''})`}
-                  checked={era5Visible}
-                  onChange={onToggleEra5}
-                />
-
-                {era5Visible && (
-                  <div id="era5-controls">
-                    {era5Range && (
-                      <div className="era5-field">
-                        <label htmlFor="era5-month">Month</label>
-                        <input
-                          id="era5-month"
-                          type="month"
-                          min={era5Range.min}
-                          max={era5Range.max}
-                          value={era5Month || ''}
-                          onChange={(e) => e.target.value && onMonthChange(e.target.value)}
-                        />
-                      </div>
-                    )}
-
-                    {era5Status === 'error' && (
-                      <div className="era5-error">No data for that month{era5Error ? ` — ${era5Error}` : ''}</div>
-                    )}
-
-                    <div className="era5-field">
-                      <label htmlFor="era5-opacity">Opacity</label>
-                      <input
-                        id="era5-opacity"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={era5Opacity}
-                        onChange={(e) => onOpacityChange(Number(e.target.value))}
-                      />
-                      <span className="era5-opacity-value">{Math.round(era5Opacity * 100)}%</span>
-                    </div>
-
-                    <div id="era5-scale">
-                      <div className="era5-scale-bar" style={{ background: gradient }} />
-                      <div className="era5-scale-labels">
-                        <span>{era5.minC}°C</span>
-                        <span>{era5.maxC}°C</span>
                       </div>
                     </div>
                   </div>

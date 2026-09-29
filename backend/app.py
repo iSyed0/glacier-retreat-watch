@@ -15,7 +15,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 import buildings
-import era5
 import era5_annual
 import population_raster
 import trends
@@ -68,21 +67,10 @@ COUNTRY_NAMES = {
     "TJ": "Tajikistan",
 }
 
-# ERA5 monthly mean 2m air temperature, HKH-cropped. Tile URLs are generated
-# on demand per month via the Earth Engine service account (see era5.py) --
-# this is just the static display config that doesn't depend on which month
-# is selected.
-ERA5_LAYER = {
-    "attribution": "ERA5 (ECMWF) via Google Earth Engine",
-    "minC": -23,
-    "maxC": 47,
-    "palette": era5.VIS_PARAMS["palette"],
-}
-
 # Annual mean 2m air temperature, 1999-2026, ERA5-Land -- the year-slider
 # layer ported from the GEE Code Editor script (see era5_annual.py). Static
-# display config; the year range itself still comes from /api/era5-annual/range
-# so the frontend has one shape to fetch both layers' ranges from.
+# display config; the year range/tiles themselves come from
+# /api/era5-annual/range and /api/era5-annual/tiles.
 ERA5_ANNUAL_LAYER = {
     "attribution": "ERA5-Land (ECMWF) via Google Earth Engine",
     "minC": era5_annual.VIS_PARAMS["min"],
@@ -90,10 +78,9 @@ ERA5_ANNUAL_LAYER = {
     "palette": era5_annual.VIS_PARAMS["palette"],
 }
 
-# Gridded population density, HKH-cropped. Unlike ERA5 there's no month
-# parameter (CIESIN GPWv4.11 is a single 2020 snapshot), so the static
-# display config here doubles as everything the frontend needs -- no
-# separate per-request metadata call like era5/range.
+# Gridded population density, HKH-cropped -- a single 2020 snapshot (CIESIN
+# GPWv4.11 only publishes one image per 5-year interval), so the static
+# display config here doubles as everything the frontend needs.
 POPULATION_RASTER_LAYER = {
     "attribution": "CIESIN GPWv4.11 (2020) via Google Earth Engine",
     "maxDensity": population_raster.MAX_DENSITY,
@@ -136,7 +123,6 @@ def health():
 def config():
     return {
         "countryNames": COUNTRY_NAMES,
-        "era5": ERA5_LAYER,
         "era5Annual": ERA5_ANNUAL_LAYER,
         "populationRaster": POPULATION_RASTER_LAYER,
         "mapCenter": [82.5, 32.0],
@@ -259,48 +245,23 @@ def glacier_mass_balance_trends_pakistan():
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
 
 
-@app.get("/api/era5/range")
-def era5_range():
-    """The earliest/latest months (YYYY-MM) actually available to query."""
-    try:
-        return era5.get_date_range()
-    except era5.Era5Unavailable as exc:
-        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
-
-
-@app.get("/api/era5/tile")
-def era5_tile(year: int, month: int):
-    """Live XYZ tile URL for one calendar month, HKH-cropped."""
-    if not (1 <= month <= 12):
-        raise HTTPException(status_code=400, detail="month must be 1-12")
-    try:
-        result = era5.get_tile_for_month(year, month)
-    except era5.Era5Unavailable as exc:
-        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
-    if result is None:
-        raise HTTPException(status_code=404, detail=f"No ERA5 data for {year}-{month:02d}")
-    return result
-
-
 @app.get("/api/era5-annual/range")
 def era5_annual_range():
     """The earliest/latest years the annual temperature layer will query."""
     return era5_annual.get_year_range()
 
 
-@app.get("/api/era5-annual/tile")
-def era5_annual_tile(year: int):
-    """Live XYZ tile URL for one calendar year's mean temperature, plus the
-    area-mean reading, HKH-cropped (see era5_annual.py for the boundary)."""
-    if not (era5_annual.MIN_YEAR <= year <= era5_annual.MAX_YEAR):
-        raise HTTPException(status_code=400, detail=f"year must be {era5_annual.MIN_YEAR}-{era5_annual.MAX_YEAR}")
+@app.get("/api/era5-annual/tiles")
+def era5_annual_tiles():
+    """Every year's tile in one response (see era5_annual.get_all_tiles) --
+    the frontend fetches this once up front rather than one request per
+    year as the slider moves, which was slow and race-prone enough
+    per-year that playback visibly lagged and could momentarily show a
+    year the user had already scrubbed past."""
     try:
-        result = era5_annual.get_tile_for_year(year)
+        return era5_annual.get_all_tiles()
     except era5_annual.Era5AnnualUnavailable as exc:
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
-    if result is None:
-        raise HTTPException(status_code=404, detail=f"No ERA5-Land data for {year}")
-    return result
 
 
 # In production, serve the built React app for everything else.
