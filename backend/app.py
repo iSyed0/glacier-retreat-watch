@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -109,6 +110,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# GeoJSON is very repetitive text (coordinate arrays, the same property
+# keys over and over), so it compresses hard -- glaciers.geojson alone is
+# ~15MB uncompressed. This cuts every response over 1KB, not just the
+# GeoJSON ones, so the small JSON endpoints (trends, config, ...) get it
+# too at negligible cost.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+# These files only change when the backend is redeployed with freshly
+# merged data (a manual step, not something that happens while the server
+# is running), and several are large enough -- glaciers ~15MB, rivers
+# ~9MB, the Pakistan boundaries ~4-6MB each -- that avoiding a re-fetch
+# matters: MapView.jsx re-adds every overlay source on each basemap
+# switch (see its comment on addOverlayLayers), so without this header,
+# switching basemaps back and forth re-downloads all of them every time.
+STATIC_GEOJSON_HEADERS = {"Cache-Control": "public, max-age=3600"}
+
 
 @app.get("/api/health")
 def health():
@@ -135,14 +152,14 @@ def config():
 def glaciers():
     # Served straight off disk -- it's a large static file and doesn't need
     # to be parsed/re-serialized on every request.
-    return FileResponse(GLACIERS_FILE, media_type="application/geo+json")
+    return FileResponse(GLACIERS_FILE, media_type="application/geo+json", headers=STATIC_GEOJSON_HEADERS)
 
 
 @app.get("/api/boundary")
 def boundary():
     # HKH study area outline (projects/endless-gamma-379613/assets/HKH),
     # same geometry the ERA5 layer is clipped to -- served straight off disk.
-    return FileResponse(BOUNDARY_FILE, media_type="application/geo+json")
+    return FileResponse(BOUNDARY_FILE, media_type="application/geo+json", headers=STATIC_GEOJSON_HEADERS)
 
 
 @app.get("/api/boundaries/pakistan/{level}")
@@ -153,7 +170,7 @@ def pakistan_boundary(level: str):
         raise HTTPException(status_code=404, detail=f"Unknown boundary level: {level}")
     if not path.exists():
         raise HTTPException(status_code=503, detail=f"Boundary file not available: {path.name}")
-    return FileResponse(path, media_type="application/geo+json")
+    return FileResponse(path, media_type="application/geo+json", headers=STATIC_GEOJSON_HEADERS)
 
 
 @app.get("/api/sensors/{key}")
@@ -165,7 +182,7 @@ def sensor_layer(key: str):
         raise HTTPException(status_code=404, detail=f"Unknown sensor layer: {key}")
     if not path.exists():
         raise HTTPException(status_code=503, detail=f"Sensor file not available: {path.name}")
-    return FileResponse(path, media_type="application/geo+json")
+    return FileResponse(path, media_type="application/geo+json", headers=STATIC_GEOJSON_HEADERS)
 
 
 @app.get("/api/rivers")
@@ -174,7 +191,7 @@ def rivers():
     straight off disk like the other static GeoJSON layers."""
     if not RIVERS_FILE.exists():
         raise HTTPException(status_code=503, detail=f"Rivers file not available: {RIVERS_FILE.name}")
-    return FileResponse(RIVERS_FILE, media_type="application/geo+json")
+    return FileResponse(RIVERS_FILE, media_type="application/geo+json", headers=STATIC_GEOJSON_HEADERS)
 
 
 @app.get("/api/buildings/index")
