@@ -147,9 +147,10 @@
 #basemap-switcher button:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 #basemap-switcher button.active { color: #05131f; background: var(--accent); }
 
-/* Annual-temperature time scrubber -- bottom-center, full-width bar on the
-   map itself (see AnnualTimeSlider.jsx for why it isn't in the Legend). */
-#annual-time-slider {
+/* Period (temperature + glacier retreat) time scrubber -- bottom-center,
+   full-width bar on the map itself (see PeriodSlider.jsx for why it isn't
+   in the Legend). */
+#period-slider {
   position: fixed;
   left: 50%;
   bottom: 16px;
@@ -215,12 +216,32 @@
   accent-color: var(--accent);
   cursor: pointer;
 }
-.ats-bound {
-  flex-shrink: 0;
-  font-size: 11px;
+.ats-ticks {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 6px;
+}
+.ats-tick {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
   color: var(--muted);
-  width: 30px;
+  font-size: 10.5px;
+  padding: 3px 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
   text-align: center;
+}
+.ats-tick:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+}
+.ats-tick.active {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 /* Legend -- freely draggable via its header, position:fixed so drag

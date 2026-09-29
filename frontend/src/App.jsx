@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import './App.css'
 import MapView from './components/MapView'
 import Legend from './components/Legend'
-import AnnualTimeSlider from './components/AnnualTimeSlider'
+import PeriodSlider from './components/PeriodSlider'
 import DataSheet from './components/DataSheet'
 import BasemapSwitcher from './components/BasemapSwitcher'
 import TrendsPanelStats from './components/TrendsPanelStats'
@@ -62,14 +62,14 @@ export default function App() {
   const [mapStyleId, setMapStyleId] = useState(DEFAULT_MAP_STYLE_ID)
   const [recenterSignal, setRecenterSignal] = useState(0)
 
-  const [era5AnnualVisible, setEra5AnnualVisible] = useState(false)
-  const [era5AnnualOpacity, setEra5AnnualOpacity] = useState(0.65)
-  const [era5AnnualRange, setEra5AnnualRange] = useState(null) // { min: 1999, max: 2026 }
-  const [era5AnnualYear, setEra5AnnualYear] = useState(null) // the year the user has selected
-  const [era5AnnualTiles, setEra5AnnualTiles] = useState({}) // year -> { tileUrlTemplate, year, meanTempC }, all fetched in one batch
-  const [era5AnnualStatus, setEra5AnnualStatus] = useState('idle') // idle | loading | ready | error -- for the one-time batch fetch, not per-year
-  const [era5AnnualError, setEra5AnnualError] = useState('')
-  const [era5AnnualPlaying, setEra5AnnualPlaying] = useState(false)
+  const [era5PeriodsVisible, setEra5PeriodsVisible] = useState(false)
+  const [era5PeriodsOpacity, setEra5PeriodsOpacity] = useState(0.65)
+  const [periods, setPeriods] = useState(null) // [{ startYear, endYear }, ...] -- the same 5 windows as the Trends+ charts
+  const [periodIndex, setPeriodIndex] = useState(null) // which entry of `periods` is selected -- also drives glacier-dot coloring
+  const [era5PeriodsTiles, setEra5PeriodsTiles] = useState({}) // index -> { tileUrlTemplate, startYear, endYear, meanTempC }, all fetched in one batch
+  const [era5PeriodsStatus, setEra5PeriodsStatus] = useState('idle') // idle | loading | ready | error -- for the one-time batch fetch, not per-step
+  const [era5PeriodsError, setEra5PeriodsError] = useState('')
+  const [era5PeriodsPlaying, setEra5PeriodsPlaying] = useState(false)
   const [boundaryVisible, setBoundaryVisible] = useState(true)
   const [pkNationalVisible, setPkNationalVisible] = useState(false)
   const [pkProvincesVisible, setPkProvincesVisible] = useState(false)
@@ -145,33 +145,33 @@ export default function App() {
       })
   }, [])
 
-  // Find out which years the annual layer covers, then default to the
-  // earliest (matching the GEE script this layer was ported from, which
-  // opens on 1999 rather than the most recent year).
+  // Find out the 5 period boundaries (same windows as the Trends+ charts),
+  // then default to the earliest.
   useEffect(() => {
-    fetch('/api/era5-annual/range')
+    fetch('/api/era5-periods/list')
       .then((r) => {
-        if (!r.ok) throw new Error(`range request failed (${r.status})`)
+        if (!r.ok) throw new Error(`list request failed (${r.status})`)
         return r.json()
       })
-      .then((range) => {
-        setEra5AnnualRange(range)
-        setEra5AnnualYear(range.min)
+      .then((list) => {
+        setPeriods(list)
+        setPeriodIndex(0)
       })
-      .catch((err) => setEra5AnnualError(err.message))
+      .catch((err) => setEra5PeriodsError(err.message))
   }, [])
 
-  // Fetch every year's tile in one batch, the first time the layer is
-  // switched on -- not one request per year as the slider moves. Each
-  // year is a real Earth Engine round trip, so per-year fetching was slow
-  // enough that scrubbing/playing visibly lagged, and a fetch for a year
-  // the user had already moved past could still resolve and briefly show
-  // stale imagery. era5AnnualStatus stays 'idle' until this fires, so the
+  // Fetch every period's tile in one batch, the first time the layer is
+  // switched on -- not one request per step as the slider moves. Each is
+  // a real Earth Engine round trip, so per-step fetching (back when this
+  // layer had 28 annual steps rather than 5) was slow enough that
+  // scrubbing/playing visibly lagged, and a fetch for a step the user had
+  // already moved past could still resolve and briefly show stale
+  // imagery. era5PeriodsStatus stays 'idle' until this fires, so the
   // guard below only lets it run once.
   useEffect(() => {
-    if (!era5AnnualVisible || era5AnnualStatus !== 'idle') return
-    setEra5AnnualStatus('loading')
-    fetch('/api/era5-annual/tiles')
+    if (!era5PeriodsVisible || era5PeriodsStatus !== 'idle') return
+    setEra5PeriodsStatus('loading')
+    fetch('/api/era5-periods/tiles')
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}))
@@ -180,34 +180,27 @@ export default function App() {
         return r.json()
       })
       .then((tiles) => {
-        setEra5AnnualTiles(Object.fromEntries(tiles.map((t) => [t.year, t])))
-        setEra5AnnualStatus('ready')
+        setEra5PeriodsTiles(Object.fromEntries(tiles.map((t, i) => [i, t])))
+        setEra5PeriodsStatus('ready')
       })
       .catch((err) => {
-        setEra5AnnualStatus('error')
-        setEra5AnnualError(err.message)
+        setEra5PeriodsStatus('error')
+        setEra5PeriodsError(err.message)
       })
-  }, [era5AnnualVisible, era5AnnualStatus])
+  }, [era5PeriodsVisible, era5PeriodsStatus])
 
-  // Play/pause: advance one year at a time on a fixed interval (matching
-  // the 1200ms cadence of the GEE script this was ported from), stopping
-  // automatically at the last year rather than looping. Gated on the batch
-  // fetch above being done -- every year is instant once it is, so there's
-  // no per-frame loading state to juggle during playback.
+  // Play/pause: advance one period at a time on a fixed interval, looping
+  // back to the first period at the end rather than stopping -- playback
+  // only stops when paused manually. Gated on the batch fetch above being
+  // done -- every period is instant once it is, so there's no per-frame
+  // loading state to juggle during playback.
   useEffect(() => {
-    if (!era5AnnualPlaying || !era5AnnualRange || era5AnnualStatus !== 'ready') return
+    if (!era5PeriodsPlaying || !periods || era5PeriodsStatus !== 'ready') return
     const id = setInterval(() => {
-      setEra5AnnualYear((y) => {
-        const next = y + 1
-        if (next > era5AnnualRange.max) {
-          setEra5AnnualPlaying(false)
-          return y
-        }
-        return next
-      })
+      setPeriodIndex((i) => (i >= periods.length - 1 ? 0 : i + 1))
     }, 1200)
     return () => clearInterval(id)
-  }, [era5AnnualPlaying, era5AnnualRange, era5AnnualStatus])
+  }, [era5PeriodsPlaying, periods, era5PeriodsStatus])
 
   // Fetch a chart's data the first time it's opened, not on mount -- these
   // are real Earth Engine + local-computation calls on the backend, worth
@@ -237,9 +230,9 @@ export default function App() {
 
   const closeChart = (key) => setCharts((prev) => ({ ...prev, [key]: { ...prev[key], open: false } }))
 
-  // The current year's entry out of the batch fetched above -- looked up,
-  // not fetched, so selecting/scrubbing/playing a year is instant.
-  const era5AnnualTile = era5AnnualYear != null ? era5AnnualTiles[era5AnnualYear] || null : null
+  // The current period's tile out of the batch fetched above -- looked
+  // up, not fetched, so selecting/scrubbing/playing a period is instant.
+  const era5PeriodsTile = periodIndex != null ? era5PeriodsTiles[periodIndex] || null : null
 
   return (
     <div id="app">
@@ -259,9 +252,10 @@ export default function App() {
         <MapView
           config={config}
           mapStyleId={mapStyleId}
-          era5AnnualVisible={era5AnnualVisible}
-          era5AnnualOpacity={era5AnnualOpacity}
-          era5AnnualTileUrl={era5AnnualTile?.tileUrlTemplate || null}
+          era5PeriodsVisible={era5PeriodsVisible}
+          era5PeriodsOpacity={era5PeriodsOpacity}
+          era5PeriodsTileUrl={era5PeriodsTile?.tileUrlTemplate || null}
+          periodIndex={periodIndex}
           boundaryVisible={boundaryVisible}
           pkNationalVisible={pkNationalVisible}
           pkProvincesVisible={pkProvincesVisible}
@@ -287,12 +281,12 @@ export default function App() {
         <BasemapSwitcher styleId={mapStyleId} onChange={setMapStyleId} />
         <Legend
           onRecenter={() => setRecenterSignal((n) => n + 1)}
-          era5Annual={config?.era5Annual}
-          era5AnnualVisible={era5AnnualVisible}
-          onToggleEra5Annual={setEra5AnnualVisible}
-          era5AnnualOpacity={era5AnnualOpacity}
-          onEra5AnnualOpacityChange={setEra5AnnualOpacity}
-          era5AnnualYear={era5AnnualYear}
+          era5Periods={config?.era5Periods}
+          era5PeriodsVisible={era5PeriodsVisible}
+          onToggleEra5Periods={setEra5PeriodsVisible}
+          era5PeriodsOpacity={era5PeriodsOpacity}
+          onEra5PeriodsOpacityChange={setEra5PeriodsOpacity}
+          currentPeriod={periodIndex != null ? periods?.[periodIndex] : null}
           boundaryVisible={boundaryVisible}
           onToggleBoundary={setBoundaryVisible}
           pkNationalVisible={pkNationalVisible}
@@ -327,16 +321,16 @@ export default function App() {
           riversVisible={riversVisible}
           onToggleRivers={setRiversVisible}
         />
-        <AnnualTimeSlider
-          visible={era5AnnualVisible}
-          range={era5AnnualRange}
-          year={era5AnnualYear}
-          onYearChange={setEra5AnnualYear}
-          playing={era5AnnualPlaying}
-          onTogglePlaying={() => setEra5AnnualPlaying((p) => !p)}
-          tile={era5AnnualTile}
-          status={era5AnnualStatus}
-          error={era5AnnualError}
+        <PeriodSlider
+          visible={era5PeriodsVisible}
+          periods={periods}
+          periodIndex={periodIndex}
+          onPeriodIndexChange={setPeriodIndex}
+          playing={era5PeriodsPlaying}
+          onTogglePlaying={() => setEra5PeriodsPlaying((p) => !p)}
+          tile={era5PeriodsTile}
+          status={era5PeriodsStatus}
+          error={era5PeriodsError}
         />
         <DataSheet
           feature={selectedFeature}

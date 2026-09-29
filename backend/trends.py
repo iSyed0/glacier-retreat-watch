@@ -5,7 +5,9 @@ publish per-glacier elevation change for -- that's the actual resolution
 the glacier data supports (not truly annual; see backend/data/glaciers.geojson's
 `p` field), so temperature is aggregated to match rather than pretending
 either series is annual. A fifth period, 2020-2026, extends both series
-with real (not projected) data -- see PROJECTED_PERIOD below.
+with real (not projected) data -- see PROJECTED_PERIOD in periods.py,
+shared with era5_periods.py and the glacier-merge script so every
+period boundary used anywhere in the app comes from one place.
 """
 
 import json
@@ -15,33 +17,20 @@ from pathlib import Path
 import ee
 
 import earth_engine
-import era5_annual
+import era5_periods
+from periods import PERIODS, PROJECTED_PERIOD
 
 GLACIERS_FILE = Path(__file__).resolve().parent / "data" / "glaciers.geojson"
 
-# The four consecutive periods every glacier in the dataset carries a
-# Hugonnet elevation-change figure for (see DataSheet.jsx, which renders
-# the same `p` field per-glacier) -- together they span the full 1999-2019
-# record.
-PERIODS = [(1999, 2004), (2004, 2009), (2009, 2014), (2014, 2019)]
-
-# 2020-2026 update, sourced from the `pRecent` field (see the glacier-merge
-# commit) rather than `p` -- WGMS's Annual Mass-Change Estimates (Dussaillant
-# et al. 2025), not the original Hugonnet et al. 2021 figures, so it's kept
-# in its own field/period rather than appended to `p`. 2025 is the latest
-# hydrological year actually published; "2026" is this app's label for the
-# period, not a claim that 2026 itself has data.
-PROJECTED_PERIOD = (2020, 2026)
-
 # ERA5-Land, not the legacy ERA5 monthly collection (frozen since 2020-06) --
-# same source as the map's annual-temperature layer (era5_annual.py), reused
-# directly rather than duplicated. Every period is computed from it, not
-# just the new one: ERA5-Land's 0.1-degree resolution reads HKH's mountain
-# terrain differently than the legacy collection's 0.25 degrees (about
-# 0.75 degC cooler over the same boundary/period), so mixing sources across
-# periods would show up as a fake "jump" right at the seam.
-ERA5_COLLECTION_ID = era5_annual.COLLECTION_ID
-ERA5_BAND = era5_annual.BAND
+# same source as the map's period-temperature layer (era5_periods.py),
+# reused directly rather than duplicated. Every period is computed from
+# it, not just the new one: ERA5-Land's 0.1-degree resolution reads HKH's
+# mountain terrain differently than the legacy collection's 0.25 degrees
+# (about 0.75 degC cooler over the same boundary/period), so mixing
+# sources across periods would show up as a fake "jump" right at the seam.
+ERA5_COLLECTION_ID = era5_periods.COLLECTION_ID
+ERA5_BAND = era5_periods.BAND
 ERA5_SCALE_M = 11132  # ERA5-Land's native ~0.1 degree resolution
 
 # Standard glacier-ice density assumption used to convert geodetic volume
