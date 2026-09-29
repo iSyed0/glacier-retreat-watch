@@ -19,7 +19,7 @@ const CHART_DEFS = [
     rowTitle: 'Elevation change + temperature',
     region: 'HKH region',
     title: 'Glacier change vs. temperature',
-    sub: 'HKH region · 1999–2019 measured, 2020–2026 SSP5-8.5 projection',
+    sub: 'HKH region · 1999–2019 (historical record)',
     scopeNote: 'every HKH glacier',
   },
   {
@@ -29,7 +29,7 @@ const CHART_DEFS = [
     rowTitle: 'Elevation change + temperature',
     region: 'Pakistan',
     title: 'Glacier change vs. temperature — Pakistan',
-    sub: 'Pakistan (HKH) · 1999–2019 measured, 2020–2026 SSP5-8.5 projection',
+    sub: 'Pakistan (HKH) · 1999–2019 (historical record)',
     scopeNote: 'every glacier inside Pakistan',
   },
   {
@@ -39,7 +39,7 @@ const CHART_DEFS = [
     rowTitle: 'Mass balance + temperature',
     region: 'HKH region',
     title: 'Glacier mass balance vs. temperature',
-    sub: 'HKH region · 1999–2019 measured, 2020–2026 SSP5-8.5 projection',
+    sub: 'HKH region · 1999–2019 (historical record)',
     scopeNote: 'every HKH glacier',
   },
   {
@@ -49,7 +49,7 @@ const CHART_DEFS = [
     rowTitle: 'Mass balance + temperature',
     region: 'Pakistan',
     title: 'Glacier mass balance vs. temperature — Pakistan',
-    sub: 'Pakistan (HKH) · 1999–2019 measured, 2020–2026 SSP5-8.5 projection',
+    sub: 'Pakistan (HKH) · 1999–2019 (historical record)',
     scopeNote: 'every glacier inside Pakistan',
   },
 ]

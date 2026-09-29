@@ -1,12 +1,10 @@
 """
-Region-wide glacier elevation-change vs. temperature trend, over the four
-5-year periods (1999-2019, 20 years total) that Hugonnet et al. (2021)
+Region-wide glacier elevation-change vs. temperature trend, over the same
+four 5-year periods (1999-2019, 20 years total) that Hugonnet et al. (2021)
 publish per-glacier elevation change for -- that's the actual resolution
 the glacier data supports (not truly annual; see backend/data/glaciers.geojson's
 `p` field), so temperature is aggregated to match rather than pretending
-either series is annual. A fifth period, 2020-2026, extends both series
-with the SSP5-8.5 volume projection (`p585`) and ERA5-Land temperature --
-see PROJECTED_PERIOD below.
+either series is annual.
 """
 
 import json
@@ -25,25 +23,8 @@ GLACIERS_FILE = Path(__file__).resolve().parent / "data" / "glaciers.geojson"
 # record.
 PERIODS = [(1999, 2004), (2004, 2009), (2009, 2014), (2014, 2019)]
 
-# 2020-2026 SSP5-8.5 volume-projection period, sourced from the `p585`
-# field (see the glacier-merge commit) rather than `p` -- kept out of
-# PERIODS above since it isn't a Hugonnet et al. 2021 figure. It still
-# gets a real temperature figure from get_temperature_trend below, same
-# as the historical periods.
-PROJECTED_PERIOD = (2020, 2026)
-
-# ECMWF/ERA5/MONTHLY (the legacy collection) stopped updating at 2020-06,
-# so it can't cover PROJECTED_PERIOD. ERA5-Land is the still-updated
-# replacement (current through at least mid-2026 as of writing) -- but at
-# 0.1 degrees vs. the legacy collection's 0.25 degrees, it resolves HKH's
-# mountain terrain differently and reads about 0.75 degC cooler for the
-# same period over the same boundary. Using the legacy collection for the
-# historical periods and switching to ERA5-Land only for PROJECTED_PERIOD
-# would show up as a fake ~0.75degC "drop" right at the seam, so every
-# period is computed from ERA5-Land for consistency, not just the new one.
-ERA5_COLLECTION_ID = "ECMWF/ERA5_LAND/MONTHLY_AGGR"
-ERA5_BAND = "temperature_2m"
-ERA5_SCALE_M = 11132  # ERA5-Land's native ~0.1 degree resolution
+ERA5_COLLECTION_ID = "ECMWF/ERA5/MONTHLY"
+ERA5_BAND = "mean_2m_air_temperature"
 
 # Standard glacier-ice density assumption used to convert geodetic volume
 # change to mass change (Huss, 2013; the same value Hugonnet et al. 2021
@@ -67,8 +48,7 @@ def get_glacier_trend(country=None):
         gj = json.load(f)
 
     results = []
-    for start, end in PERIODS + [PROJECTED_PERIOD]:
-        field = "p585" if (start, end) == PROJECTED_PERIOD else "p"
+    for start, end in PERIODS:
         weighted_sum = 0.0
         area_sum = 0.0
         count = 0
@@ -76,7 +56,7 @@ def get_glacier_trend(country=None):
             props = feat["properties"]
             if country is not None and props.get("country") != country:
                 continue
-            periods = props.get(field)
+            periods = props.get("p")
             if not periods:
                 continue
             match = next((row for row in periods if row[0] == start and row[1] == end), None)
@@ -113,8 +93,7 @@ def get_mass_balance_trend(country=None):
         gj = json.load(f)
 
     results = []
-    for start, end in PERIODS + [PROJECTED_PERIOD]:
-        field = "p585" if (start, end) == PROJECTED_PERIOD else "p"
+    for start, end in PERIODS:
         volume_sum_mm3 = 0.0  # Mm3 (10^6 m3)
         area_sum = 0.0
         count = 0
@@ -122,7 +101,7 @@ def get_mass_balance_trend(country=None):
             props = feat["properties"]
             if country is not None and props.get("country") != country:
                 continue
-            periods = props.get(field)
+            periods = props.get("p")
             if not periods:
                 continue
             match = next((row for row in periods if row[0] == start and row[1] == end), None)
@@ -162,13 +141,13 @@ def get_temperature_trend(country=None):
 
     coll = ee.ImageCollection(ERA5_COLLECTION_ID).select(ERA5_BAND)
     results = []
-    for start, end in PERIODS + [PROJECTED_PERIOD]:
+    for start, end in PERIODS:
         filtered = coll.filterDate(f"{start}-01-01", f"{end}-01-01")
         mean_image = filtered.mean()
         stats = mean_image.reduceRegion(
             reducer=ee.Reducer.mean(),
             geometry=boundary,
-            scale=ERA5_SCALE_M,
+            scale=25000,
             maxPixels=1e9,
             bestEffort=True,
         )
@@ -183,15 +162,12 @@ def get_temperature_trend(country=None):
 
 def get_trends(country=None):
     """Both series, joined period-by-period -- region-wide by default, or
-    scoped to one country's glaciers + its portion of the HKH boundary.
-    Iterates over the glacier side (rather than the temperature side) so
-    that if the two ever disagree on which periods they cover, a period
-    missing from `temperature` still comes through with meanTempC set to
-    None instead of silently being dropped from the response."""
-    temperature = {(t["startYear"], t["endYear"]): t["meanTempC"] for t in get_temperature_trend(country)}
+    scoped to one country's glaciers + its portion of the HKH boundary."""
+    glacier = {(p["startYear"], p["endYear"]): p for p in get_glacier_trend(country)}
+    temperature = get_temperature_trend(country)
     return [
-        {**g, "meanTempC": temperature.get((g["startYear"], g["endYear"]))}
-        for g in get_glacier_trend(country)
+        {**glacier[(t["startYear"], t["endYear"])], "meanTempC": t["meanTempC"]}
+        for t in temperature
     ]
 
 
@@ -199,8 +175,9 @@ def get_mass_balance_trends(country=None):
     """Mass-balance-rate + temperature, joined period-by-period -- the same
     shape as get_trends(), just with massBalanceRateGtYr instead of
     elevationChangeRateM."""
-    temperature = {(t["startYear"], t["endYear"]): t["meanTempC"] for t in get_temperature_trend(country)}
+    mass_balance = {(p["startYear"], p["endYear"]): p for p in get_mass_balance_trend(country)}
+    temperature = get_temperature_trend(country)
     return [
-        {**m, "meanTempC": temperature.get((m["startYear"], m["endYear"]))}
-        for m in get_mass_balance_trend(country)
+        {**mass_balance[(t["startYear"], t["endYear"])], "meanTempC": t["meanTempC"]}
+        for t in temperature
     ]

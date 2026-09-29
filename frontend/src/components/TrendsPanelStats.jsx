@@ -171,7 +171,7 @@ export default function TrendsPanelStats({
   status,
   error,
   title = 'Glacier change vs. temperature',
-  sub = 'HKH region · 1999–2019 measured, 2020–2026 SSP5-8.5 projection',
+  sub = 'HKH region · 1999–2019 (historical record)',
   scopeNote = 'every HKH glacier',
   variant = 'elevation',
 }) {
@@ -237,23 +237,14 @@ export default function TrendsPanelStats({
       (sum, p) => (p[metric.rateKey] != null ? sum + p[metric.rateKey] * (p.endYear - p.startYear) : sum),
       0
     )
-    // Temperature change uses the last period that actually has a real ERA5
-    // figure, not just periods[n-1] -- defensive fallback in case a period
-    // is ever added without one; every current period has a real figure.
-    const firstWithTemp = periods.find((p) => p.meanTempC != null)
-    const lastWithTemp = [...periods].reverse().find((p) => p.meanTempC != null)
-    const tempDeltaC = firstWithTemp && lastWithTemp && firstWithTemp !== lastWithTemp
-      ? lastWithTemp.meanTempC - firstWithTemp.meanTempC
-      : null
+    const tempDeltaC = first.meanTempC != null && last.meanTempC != null ? last.meanTempC - first.meanTempC : null
     return {
       spanLabel: `${first.startYear}–${last.endYear}`,
       baselineLabel: `${first.startYear}–${first.endYear}`,
       cumulativePrimary,
       tempDeltaC,
-      tempSpanLabel: firstWithTemp && lastWithTemp ? `${firstWithTemp.startYear}–${lastWithTemp.endYear}` : `${first.startYear}–${last.endYear}`,
       baselineAreaKm2: first.totalAreaKm2,
       baselineCount: first.glacierCount,
-      hasProjectedPeriod: last.startYear === 2020 && last.endYear === 2026,
     }
   }, [periods, n, metric.rateKey])
 
@@ -379,7 +370,7 @@ export default function TrendsPanelStats({
                     label="Temperature change"
                     value={stats.tempDeltaC != null ? `${stats.tempDeltaC >= 0 ? '+' : ''}${stats.tempDeltaC.toFixed(2)}` : '—'}
                     unit="°C"
-                    sub={`${stats.tempSpanLabel} change`}
+                    sub={`${stats.spanLabel} change`}
                   />
                   <StatCard
                     icon="area"
@@ -482,13 +473,9 @@ export default function TrendsPanelStats({
                   </table>
 
                   <div className="ds-footer-note">
-                    {metric.methodNote(scopeNote)} Temperature: ERA5-Land monthly
-                    aggregates (ECMWF), averaged over the same region for each
-                    period, via Google Earth Engine -- used in place of the legacy
-                    ERA5 monthly collection (which stops updating in mid-2020) so
-                    every period, including the projection below, comes from one
-                    consistent temperature source.
-                    {stats?.hasProjectedPeriod && ' The 2020–26 period is a regional SSP5-8.5 volume-projection model covering only the glaciers matched to it (see that period’s glacier count above) -- a smaller, geographically narrower sample than the historical periods, so treat its elevation/mass figure as directional rather than a like-for-like total; the temperature figure for that period is a real ERA5-Land reading, not projected.'}
+                    {metric.methodNote(scopeNote)} Temperature: ERA5
+                    monthly reanalysis (ECMWF), averaged over the same region for each
+                    period, via Google Earth Engine.
                   </div>
                 </div>
               </div>
@@ -508,7 +495,7 @@ export default function TrendsPanelStats({
           <div className="tplus-tooltip-row">
             <span className="tplus-key" style={{ background: TEMP_COLOR }} />
             <span className="tplus-tooltip-label">Mean temperature</span>
-            <span className="tplus-tooltip-value">{active.meanTempC != null ? `${active.meanTempC.toFixed(2)} °C` : '—'}</span>
+            <span className="tplus-tooltip-value">{active.meanTempC?.toFixed(2)} °C</span>
           </div>
           <div className="tplus-tooltip-row muted">
             <span className="tplus-tooltip-label">Glaciers sampled</span>
