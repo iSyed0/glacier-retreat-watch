@@ -90,13 +90,6 @@ export default function Legend({
   onLandcoverEsriOpacityChange,
   landcoverEsriStatus,
   landcoverEsriError,
-  landcoverEsa,
-  landcoverEsaVisible,
-  onToggleLandcoverEsa,
-  landcoverEsaOpacity,
-  onLandcoverEsaOpacityChange,
-  landcoverEsaStatus,
-  landcoverEsaError,
   sensorsGlof2Visible,
   onToggleSensorsGlof2,
   sensorsGlof2DamagedVisible,
@@ -383,48 +376,6 @@ export default function Legend({
 
                     <div className="landcover-classes">
                       {landcoverEsri.classes.map((c) => (
-                        <div key={c.value} className="landcover-class-row">
-                          <span className="landcover-class-swatch" style={{ background: '#' + c.color }} />
-                          <span>{c.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {landcoverEsa && (
-              <>
-                <LayerRow
-                  swatch={classGridSwatch(landcoverEsa.classes.map((c) => c.color))}
-                  label="Land cover — ESA WorldCover (2021)"
-                  checked={landcoverEsaVisible}
-                  onChange={onToggleLandcoverEsa}
-                />
-                {landcoverEsaVisible && (
-                  <div id="era5-controls">
-                    {landcoverEsaStatus === 'loading' && <div className="era5-hint">Loading…</div>}
-                    {landcoverEsaStatus === 'error' && (
-                      <div className="era5-error">Land cover unavailable{landcoverEsaError ? ` — ${landcoverEsaError}` : ''}</div>
-                    )}
-
-                    <div className="era5-field">
-                      <label htmlFor="landcover-esa-opacity">Opacity</label>
-                      <input
-                        id="landcover-esa-opacity"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={landcoverEsaOpacity}
-                        onChange={(e) => onLandcoverEsaOpacityChange(Number(e.target.value))}
-                      />
-                      <span className="era5-opacity-value">{Math.round(landcoverEsaOpacity * 100)}%</span>
-                    </div>
-
-                    <div className="landcover-classes">
-                      {landcoverEsa.classes.map((c) => (
                         <div key={c.value} className="landcover-class-row">
                           <span className="landcover-class-swatch" style={{ background: '#' + c.color }} />
                           <span>{c.name}</span>
