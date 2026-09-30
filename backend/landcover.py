@@ -30,7 +30,11 @@ MIN_YEAR = 2017
 MAX_YEAR = 2025
 
 # Esri/Impact Observatory's own 9-class scheme and palette, values 1-9 in
-# the raw band -- see the catalog page cited above.
+# the raw band -- see the catalog page cited above. One deliberate
+# deviation from their official palette: Snow/ice was F2FAFF, an
+# off-white nearly identical to Bare ground's EDE9E4 and Clouds' C8C8C8
+# -- indistinguishable at a glance in a mountain region where all three
+# classes are common. Swapped for a vivid, unmistakably icy cyan instead.
 CLASSES = [
     {"value": 1, "name": "Water", "color": "1A5BAB"},
     {"value": 2, "name": "Trees", "color": "358221"},
@@ -38,7 +42,7 @@ CLASSES = [
     {"value": 4, "name": "Crops", "color": "FFDB5C"},
     {"value": 5, "name": "Built area", "color": "ED022A"},
     {"value": 6, "name": "Bare ground", "color": "EDE9E4"},
-    {"value": 7, "name": "Snow/ice", "color": "F2FAFF"},
+    {"value": 7, "name": "Snow/ice", "color": "4DD9FF"},
     {"value": 8, "name": "Clouds", "color": "C8C8C8"},
     {"value": 9, "name": "Rangeland", "color": "C6AD8D"},
 ]

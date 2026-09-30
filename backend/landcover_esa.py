@@ -22,6 +22,12 @@ BAND = "Map"
 # ESA's own 11-class scheme and palette, values 10-100 in the raw band --
 # read directly off the image's own Map_class_values/_names/_palette
 # properties and confirmed correct, rather than hardcoded from memory.
+# One deliberate deviation from their official palette: Snow and ice was
+# f0f0f0, a light gray too close to Bare/sparse vegetation's b4b4b4 to
+# tell apart at a glance in a mountain region where both are common.
+# Swapped for a vivid, unmistakably icy cyan instead (same color used
+# for landcover.py's Snow/ice class, for consistency between the two
+# land cover layers).
 CLASSES = [
     {"value": 10, "name": "Tree cover", "color": "006400"},
     {"value": 20, "name": "Shrubland", "color": "ffbb22"},
@@ -29,7 +35,7 @@ CLASSES = [
     {"value": 40, "name": "Cropland", "color": "f096ff"},
     {"value": 50, "name": "Built-up", "color": "fa0000"},
     {"value": 60, "name": "Bare / sparse vegetation", "color": "b4b4b4"},
-    {"value": 70, "name": "Snow and ice", "color": "f0f0f0"},
+    {"value": 70, "name": "Snow and ice", "color": "4DD9FF"},
     {"value": 80, "name": "Permanent water bodies", "color": "0064c8"},
     {"value": 90, "name": "Herbaceous wetland", "color": "0096a0"},
     {"value": 95, "name": "Mangroves", "color": "00cf75"},
