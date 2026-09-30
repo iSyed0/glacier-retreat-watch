@@ -91,11 +91,16 @@ export default function App() {
   const [sensorsGmrcWapdaVisible, setSensorsGmrcWapdaVisible] = useState(false)
   const [riversVisible, setRiversVisible] = useState(false)
   const [rgi7HkhRegionsVisible, setRgi7HkhRegionsVisible] = useState(false)
-  const [landcoverVisible, setLandcoverVisible] = useState(false)
-  const [landcoverOpacity, setLandcoverOpacity] = useState(0.7)
-  const [landcoverTile, setLandcoverTile] = useState(null) // { tileUrlTemplate, year }
-  const [landcoverStatus, setLandcoverStatus] = useState('idle') // idle | loading | ready | error
-  const [landcoverError, setLandcoverError] = useState('')
+  const [landcoverEsriVisible, setLandcoverEsriVisible] = useState(false)
+  const [landcoverEsriOpacity, setLandcoverEsriOpacity] = useState(0.7)
+  const [landcoverEsriTile, setLandcoverEsriTile] = useState(null) // { tileUrlTemplate, year }
+  const [landcoverEsriStatus, setLandcoverEsriStatus] = useState('idle') // idle | loading | ready | error
+  const [landcoverEsriError, setLandcoverEsriError] = useState('')
+  const [landcoverEsaVisible, setLandcoverEsaVisible] = useState(false)
+  const [landcoverEsaOpacity, setLandcoverEsaOpacity] = useState(0.7)
+  const [landcoverEsaTile, setLandcoverEsaTile] = useState(null) // { tileUrlTemplate }
+  const [landcoverEsaStatus, setLandcoverEsaStatus] = useState('idle') // idle | loading | ready | error
+  const [landcoverEsaError, setLandcoverEsaError] = useState('')
   const [charts, setCharts] = useState(() =>
     Object.fromEntries(CHART_DEFS.map((d) => [d.key, { open: false, data: null, status: 'idle', error: '' }]))
   )
@@ -213,9 +218,9 @@ export default function App() {
   // is switched on (same "don't fetch until asked" pattern as rivers/PK
   // districts), not on mount.
   useEffect(() => {
-    if (!landcoverVisible || landcoverStatus !== 'idle') return
-    setLandcoverStatus('loading')
-    fetch('/api/landcover/tile')
+    if (!landcoverEsriVisible || landcoverEsriStatus !== 'idle') return
+    setLandcoverEsriStatus('loading')
+    fetch('/api/landcover-esri/tile')
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}))
@@ -224,14 +229,37 @@ export default function App() {
         return r.json()
       })
       .then((tile) => {
-        setLandcoverTile(tile)
-        setLandcoverStatus('ready')
+        setLandcoverEsriTile(tile)
+        setLandcoverEsriStatus('ready')
       })
       .catch((err) => {
-        setLandcoverStatus('error')
-        setLandcoverError(err.message)
+        setLandcoverEsriStatus('error')
+        setLandcoverEsriError(err.message)
       })
-  }, [landcoverVisible, landcoverStatus])
+  }, [landcoverEsriVisible, landcoverEsriStatus])
+
+  // Same lazy pattern for the second land cover layer (ESA WorldCover) --
+  // a single snapshot, no year parameter.
+  useEffect(() => {
+    if (!landcoverEsaVisible || landcoverEsaStatus !== 'idle') return
+    setLandcoverEsaStatus('loading')
+    fetch('/api/landcover-esa/tile')
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}))
+          throw new Error(body.detail || `request failed (${r.status})`)
+        }
+        return r.json()
+      })
+      .then((tile) => {
+        setLandcoverEsaTile(tile)
+        setLandcoverEsaStatus('ready')
+      })
+      .catch((err) => {
+        setLandcoverEsaStatus('error')
+        setLandcoverEsaError(err.message)
+      })
+  }, [landcoverEsaVisible, landcoverEsaStatus])
 
   // Fetch a chart's data the first time it's opened, not on mount -- these
   // are real Earth Engine + local-computation calls on the backend, worth
@@ -298,9 +326,12 @@ export default function App() {
           popRasterVisible={popRasterVisible}
           popRasterOpacity={popRasterOpacity}
           popRasterTileUrl={popRasterTile?.tileUrlTemplate || null}
-          landcoverVisible={landcoverVisible}
-          landcoverOpacity={landcoverOpacity}
-          landcoverTileUrl={landcoverTile?.tileUrlTemplate || null}
+          landcoverEsriVisible={landcoverEsriVisible}
+          landcoverEsriOpacity={landcoverEsriOpacity}
+          landcoverEsriTileUrl={landcoverEsriTile?.tileUrlTemplate || null}
+          landcoverEsaVisible={landcoverEsaVisible}
+          landcoverEsaOpacity={landcoverEsaOpacity}
+          landcoverEsaTileUrl={landcoverEsaTile?.tileUrlTemplate || null}
           sensorsGlof2Visible={sensorsGlof2Visible}
           sensorsGlof2DamagedVisible={sensorsGlof2DamagedVisible}
           sensorsBriFfVisible={sensorsBriFfVisible}
@@ -342,13 +373,20 @@ export default function App() {
           onPopRasterOpacityChange={setPopRasterOpacity}
           popRasterStatus={popRasterStatus}
           popRasterError={popRasterError}
-          landcover={config?.landcover}
-          landcoverVisible={landcoverVisible}
-          onToggleLandcover={setLandcoverVisible}
-          landcoverOpacity={landcoverOpacity}
-          onLandcoverOpacityChange={setLandcoverOpacity}
-          landcoverStatus={landcoverStatus}
-          landcoverError={landcoverError}
+          landcoverEsri={config?.landcoverEsri}
+          landcoverEsriVisible={landcoverEsriVisible}
+          onToggleLandcoverEsri={setLandcoverEsriVisible}
+          landcoverEsriOpacity={landcoverEsriOpacity}
+          onLandcoverEsriOpacityChange={setLandcoverEsriOpacity}
+          landcoverEsriStatus={landcoverEsriStatus}
+          landcoverEsriError={landcoverEsriError}
+          landcoverEsa={config?.landcoverEsa}
+          landcoverEsaVisible={landcoverEsaVisible}
+          onToggleLandcoverEsa={setLandcoverEsaVisible}
+          landcoverEsaOpacity={landcoverEsaOpacity}
+          onLandcoverEsaOpacityChange={setLandcoverEsaOpacity}
+          landcoverEsaStatus={landcoverEsaStatus}
+          landcoverEsaError={landcoverEsaError}
           sensorsGlof2Visible={sensorsGlof2Visible}
           onToggleSensorsGlof2={setSensorsGlof2Visible}
           sensorsGlof2DamagedVisible={sensorsGlof2DamagedVisible}

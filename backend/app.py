@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 import buildings
 import era5_annual
 import landcover
+import landcover_esa
 import population_raster
 import trends
 
@@ -97,15 +98,20 @@ POPULATION_RASTER_LAYER = {
     "palette": population_raster.VIS_PARAMS["palette"],
 }
 
-# Sentinel-2 10m annual land cover, HKH-cropped -- the classes are
-# categorical (see landcover.py), not a continuous gradient like ERA5/
-# population, so the frontend renders this legend as class swatches
-# rather than a gradient bar.
-LANDCOVER_LAYER = {
+# Two separate land cover layers, different sources/schemes -- named
+# Esri/Esa throughout (config keys, endpoints) rather than a bare
+# "landcover" now that there's more than one. Both are categorical (not
+# a continuous gradient like ERA5/population), so the frontend renders
+# class swatches for each rather than a gradient bar.
+LANDCOVER_ESRI_LAYER = {
     "attribution": "Esri / Impact Observatory Sentinel-2 10m LULC (CC BY-4.0) via Google Earth Engine",
     "minYear": landcover.MIN_YEAR,
     "maxYear": landcover.MAX_YEAR,
     "classes": landcover.CLASSES,
+}
+LANDCOVER_ESA_LAYER = {
+    "attribution": "ESA WorldCover v200 (2021) via Google Earth Engine",
+    "classes": landcover_esa.CLASSES,
 }
 
 app = FastAPI(title="HKH Glacier Watch API")
@@ -146,7 +152,8 @@ def config():
         "countryNames": COUNTRY_NAMES,
         "era5Annual": ERA5_ANNUAL_LAYER,
         "populationRaster": POPULATION_RASTER_LAYER,
-        "landcover": LANDCOVER_LAYER,
+        "landcoverEsri": LANDCOVER_ESRI_LAYER,
+        "landcoverEsa": LANDCOVER_ESA_LAYER,
         "mapCenter": [82.5, 32.0],
         "mapZoom": 2.5,
         # Bounding box of the HKH study area boundary (backend/data/hkh_boundary.geojson)
@@ -234,8 +241,8 @@ def population_raster_tile():
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
 
 
-@app.get("/api/landcover/tile")
-def landcover_tile(year: int = landcover.MAX_YEAR):
+@app.get("/api/landcover-esri/tile")
+def landcover_esri_tile(year: int = landcover.MAX_YEAR):
     """Live XYZ tile URL for one year's Sentinel-2 10m land cover,
     HKH-cropped (mosaicked across every UTM tile covering the region --
     see landcover.py). Defaults to the most recent year."""
@@ -244,6 +251,17 @@ def landcover_tile(year: int = landcover.MAX_YEAR):
     except landcover.LandcoverYearInvalid as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except landcover.LandcoverUnavailable as exc:
+        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
+
+
+@app.get("/api/landcover-esa/tile")
+def landcover_esa_tile():
+    """Live XYZ tile URL for ESA WorldCover v200, HKH-cropped (see
+    landcover_esa.py). No year parameter -- v200 is a single 2021
+    snapshot, not a time series."""
+    try:
+        return landcover_esa.get_tile()
+    except landcover_esa.LandcoverEsaUnavailable as exc:
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
 
 

@@ -1,29 +1,34 @@
 """
 Shared Google Earth Engine service-account setup. Used by era5_annual.py
-(annual temperature), population_raster.py (population density), and
-trends.py (temperature series for the Trends+ charts) -- factored out
-here once a second EE-backed raster needed the same init/boundary logic.
+(annual temperature), landcover.py/landcover_esa.py (land cover),
+population_raster.py (population density), and trends.py (temperature
+series for the Trends+ charts) -- factored out here once a second
+EE-backed raster needed the same init/boundary logic.
 """
 
 from pathlib import Path
 
 import ee
 
-SERVICE_ACCOUNT = "portal@my-project-3191-1760691930746.iam.gserviceaccount.com"
-KEY_FILE = Path.home() / ".gcp-keys" / "my-project-3191-1760691930746-feca44372dda.json"
-PROJECT_ID = "my-project-3191-1760691930746"
+# live-integration@ is native to endless-gamma-379613 -- the same project
+# that owns both HKH boundary assets below -- so it reaches them (and every
+# public dataset this app uses) with no separate per-asset sharing step.
+# Replaced the original portal@my-project-3191-1760691930746 account,
+# which needed HKH/hkh_bda explicitly shared with it; verified this one
+# can reach everything the old one could before switching.
+SERVICE_ACCOUNT = "live-integration@endless-gamma-379613.iam.gserviceaccount.com"
+KEY_FILE = Path.home() / ".gcp-keys" / "endless-gamma-379613-38aec292d1b4.json"
+PROJECT_ID = "endless-gamma-379613"
 
 # HKH study area boundary (actual region outline, not just a bounding box) --
-# same asset shown on the frontend map. Shared read access was granted to
-# the service account above.
+# same asset shown on the frontend map.
 BOUNDARY_ASSET_ID = "projects/endless-gamma-379613/assets/HKH"
 
 # A separate, more detailed HKH outline (table asset ingested directly into
-# the endless-gamma-379613 project, so already readable by the service
-# account above with no extra sharing step) used only by the annual
-# temperature layer (era5_annual.py) -- kept distinct from BOUNDARY_ASSET_ID
-# rather than swapped in for it, since nothing else has been asked to move
-# off the original boundary.
+# the endless-gamma-379613 project) used by the annual temperature layer
+# (era5_annual.py) and the ESA WorldCover layer (landcover_esa.py) -- kept
+# distinct from BOUNDARY_ASSET_ID rather than swapped in for it, since
+# nothing else has been asked to move off the original boundary.
 HKH_BDA_ASSET_ID = "projects/endless-gamma-379613/assets/hkh_bda"
 
 # Public country-boundary dataset (LSIB) used to clip the HKH boundary down

@@ -83,13 +83,20 @@ export default function Legend({
   onPopRasterOpacityChange,
   popRasterStatus,
   popRasterError,
-  landcover,
-  landcoverVisible,
-  onToggleLandcover,
-  landcoverOpacity,
-  onLandcoverOpacityChange,
-  landcoverStatus,
-  landcoverError,
+  landcoverEsri,
+  landcoverEsriVisible,
+  onToggleLandcoverEsri,
+  landcoverEsriOpacity,
+  onLandcoverEsriOpacityChange,
+  landcoverEsriStatus,
+  landcoverEsriError,
+  landcoverEsa,
+  landcoverEsaVisible,
+  onToggleLandcoverEsa,
+  landcoverEsaOpacity,
+  onLandcoverEsaOpacityChange,
+  landcoverEsaStatus,
+  landcoverEsaError,
   sensorsGlof2Visible,
   onToggleSensorsGlof2,
   sensorsGlof2DamagedVisible,
@@ -345,37 +352,79 @@ export default function Legend({
               </>
             )}
 
-            {landcover && (
+            {landcoverEsri && (
               <>
                 <LayerRow
-                  swatch={classGridSwatch(landcover.classes.map((c) => c.color))}
-                  label={`Land cover (${landcover.maxYear})`}
-                  checked={landcoverVisible}
-                  onChange={onToggleLandcover}
+                  swatch={classGridSwatch(landcoverEsri.classes.map((c) => c.color))}
+                  label={`Land cover — Esri (${landcoverEsri.maxYear})`}
+                  checked={landcoverEsriVisible}
+                  onChange={onToggleLandcoverEsri}
                 />
-                {landcoverVisible && (
+                {landcoverEsriVisible && (
                   <div id="era5-controls">
-                    {landcoverStatus === 'loading' && <div className="era5-hint">Loading…</div>}
-                    {landcoverStatus === 'error' && (
-                      <div className="era5-error">Land cover unavailable{landcoverError ? ` — ${landcoverError}` : ''}</div>
+                    {landcoverEsriStatus === 'loading' && <div className="era5-hint">Loading…</div>}
+                    {landcoverEsriStatus === 'error' && (
+                      <div className="era5-error">Land cover unavailable{landcoverEsriError ? ` — ${landcoverEsriError}` : ''}</div>
                     )}
 
                     <div className="era5-field">
-                      <label htmlFor="landcover-opacity">Opacity</label>
+                      <label htmlFor="landcover-esri-opacity">Opacity</label>
                       <input
-                        id="landcover-opacity"
+                        id="landcover-esri-opacity"
                         type="range"
                         min="0"
                         max="1"
                         step="0.05"
-                        value={landcoverOpacity}
-                        onChange={(e) => onLandcoverOpacityChange(Number(e.target.value))}
+                        value={landcoverEsriOpacity}
+                        onChange={(e) => onLandcoverEsriOpacityChange(Number(e.target.value))}
                       />
-                      <span className="era5-opacity-value">{Math.round(landcoverOpacity * 100)}%</span>
+                      <span className="era5-opacity-value">{Math.round(landcoverEsriOpacity * 100)}%</span>
                     </div>
 
                     <div className="landcover-classes">
-                      {landcover.classes.map((c) => (
+                      {landcoverEsri.classes.map((c) => (
+                        <div key={c.value} className="landcover-class-row">
+                          <span className="landcover-class-swatch" style={{ background: '#' + c.color }} />
+                          <span>{c.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {landcoverEsa && (
+              <>
+                <LayerRow
+                  swatch={classGridSwatch(landcoverEsa.classes.map((c) => c.color))}
+                  label="Land cover — ESA WorldCover (2021)"
+                  checked={landcoverEsaVisible}
+                  onChange={onToggleLandcoverEsa}
+                />
+                {landcoverEsaVisible && (
+                  <div id="era5-controls">
+                    {landcoverEsaStatus === 'loading' && <div className="era5-hint">Loading…</div>}
+                    {landcoverEsaStatus === 'error' && (
+                      <div className="era5-error">Land cover unavailable{landcoverEsaError ? ` — ${landcoverEsaError}` : ''}</div>
+                    )}
+
+                    <div className="era5-field">
+                      <label htmlFor="landcover-esa-opacity">Opacity</label>
+                      <input
+                        id="landcover-esa-opacity"
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={landcoverEsaOpacity}
+                        onChange={(e) => onLandcoverEsaOpacityChange(Number(e.target.value))}
+                      />
+                      <span className="era5-opacity-value">{Math.round(landcoverEsaOpacity * 100)}%</span>
+                    </div>
+
+                    <div className="landcover-classes">
+                      {landcoverEsa.classes.map((c) => (
                         <div key={c.value} className="landcover-class-row">
                           <span className="landcover-class-swatch" style={{ background: '#' + c.color }} />
                           <span>{c.name}</span>
