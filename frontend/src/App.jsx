@@ -90,7 +90,6 @@ export default function App() {
   const [sensorsFocus2026Visible, setSensorsFocus2026Visible] = useState(false)
   const [sensorsGmrcWapdaVisible, setSensorsGmrcWapdaVisible] = useState(false)
   const [riversVisible, setRiversVisible] = useState(false)
-  const [rgi7HkhRegionsVisible, setRgi7HkhRegionsVisible] = useState(false)
   const [landcoverEsriVisible, setLandcoverEsriVisible] = useState(false)
   const [landcoverEsriOpacity, setLandcoverEsriOpacity] = useState(0.7)
   const [landcoverEsriTile, setLandcoverEsriTile] = useState(null) // { tileUrlTemplate, year }
@@ -286,6 +285,7 @@ export default function App() {
           era5AnnualVisible={era5AnnualVisible}
           era5AnnualOpacity={era5AnnualOpacity}
           era5AnnualTileUrl={era5AnnualTile?.tileUrlTemplate || null}
+          era5AnnualTiles={era5AnnualTiles}
           boundaryVisible={boundaryVisible}
           pkNationalVisible={pkNationalVisible}
           pkProvincesVisible={pkProvincesVisible}
@@ -307,7 +307,6 @@ export default function App() {
           sensorsFocus2026Visible={sensorsFocus2026Visible}
           sensorsGmrcWapdaVisible={sensorsGmrcWapdaVisible}
           riversVisible={riversVisible}
-          rgi7HkhRegionsVisible={rgi7HkhRegionsVisible}
         />
       )}
 
@@ -361,8 +360,6 @@ export default function App() {
           onToggleSensorsGmrcWapda={setSensorsGmrcWapdaVisible}
           riversVisible={riversVisible}
           onToggleRivers={setRiversVisible}
-          rgi7HkhRegionsVisible={rgi7HkhRegionsVisible}
-          onToggleRgi7HkhRegions={setRgi7HkhRegionsVisible}
         />
         <AnnualTimeSlider
           visible={era5AnnualVisible}

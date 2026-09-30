@@ -31,12 +31,6 @@ export const SENSOR_LAYERS = [
 // source file is a hefty ~9MB.
 const RIVERS_LAYER = { key: 'rivers', url: '/api/rivers', color: '#00b8ff' }
 
-// RGI7's Hindu Kush Himalaya glaciated-region outline (backend
-// RGI7_HKH_REGIONS_FILE) -- 3 region polygons (Central Asia, South Asia
-// West, South Asia East), only ~110KB but still fetched lazily on first
-// toggle-on, same as every other optional overlay.
-const RGI7_HKH_REGIONS_LAYER = { key: 'rgi7-hkh-regions', url: '/api/rgi7/hkh-regions', color: '#14b8a6' }
-
 function addRiversLayer(map, beforeId) {
   const { url, color } = RIVERS_LAYER
   if (map.getLayer('rivers-line')) return
@@ -65,41 +59,6 @@ function addRiversLayer(map, beforeId) {
           <div class="sensor-popup-header">${escapeHtml(Name || 'River')}</div>
           <div class="sensor-popup-rows">
             <div class="sensor-popup-row"><span class="k">Type</span><span class="v">${escapeHtml(Type || 'Unknown')}</span></div>
-          </div>
-        </div>
-      `)
-      .addTo(map)
-  })
-}
-
-function addRgi7HkhRegionsLayer(map, beforeId) {
-  const { url, color } = RGI7_HKH_REGIONS_LAYER
-  if (map.getLayer('rgi7-hkh-regions-line')) return
-  map.addSource('rgi7-hkh-regions', { type: 'geojson', data: url })
-  map.addLayer({
-    id: 'rgi7-hkh-regions-fill',
-    type: 'fill',
-    source: 'rgi7-hkh-regions',
-    paint: { 'fill-color': color, 'fill-opacity': 0.08 },
-  }, beforeId)
-  map.addLayer({
-    id: 'rgi7-hkh-regions-line',
-    type: 'line',
-    source: 'rgi7-hkh-regions',
-    paint: { 'line-color': color, 'line-width': 1.5, 'line-opacity': 0.9 },
-  }, beforeId)
-
-  map.on('mouseenter', 'rgi7-hkh-regions-fill', () => { map.getCanvas().style.cursor = 'pointer' })
-  map.on('mouseleave', 'rgi7-hkh-regions-fill', () => { map.getCanvas().style.cursor = '' })
-  map.on('click', 'rgi7-hkh-regions-fill', (e) => {
-    const { name, o1region } = e.features[0].properties
-    new mapboxgl.Popup({ closeButton: true, maxWidth: '260px', className: 'sensor-popup-wrap' })
-      .setLngLat(e.lngLat)
-      .setHTML(`
-        <div class="sensor-popup" style="--sensor-color: ${color}">
-          <div class="sensor-popup-header">${escapeHtml(name || 'RGI7 region')}</div>
-          <div class="sensor-popup-rows">
-            <div class="sensor-popup-row"><span class="k">RGI O1 region</span><span class="v">${escapeHtml(o1region)}</span></div>
           </div>
         </div>
       `)
@@ -278,18 +237,21 @@ class ZoomIndicatorControl {
 
 // The annual-temperature layer plays through 28 years, so a hard cut
 // between each year's imagery (the previous approach: swap one raster
-// source's tiles and it just pops) reads as choppy even though every
-// year's tile is already cached and instant to fetch -- the abruptness
-// is the problem, not latency. Fixed with two overlapping raster layers
-// instead of one: whichever is "front" shows the current year at full
-// opacity, the other sits at opacity 0 already loaded with the next
-// year's tiles, and stepping forward cross-fades between them (raster
-// layers support an opacity transition natively, so the fade itself
-// needs no manual animation loop). ERA5_ANNUAL_FADE_DELAY_MS gives the
-// hidden layer's tiles a moment to start arriving before the fade
-// starts, so it isn't fading in a still-blank layer.
+// source's tiles and it just pops) reads as choppy. Only each year's tile
+// *URL* is pre-fetched in one batch (see App.jsx) -- the actual PNG tiles
+// still have to be downloaded fresh from Earth Engine on every year
+// change, and that routinely takes longer than a fixed short delay, which
+// is why a naive "wait N ms then fade" still shows a pop once the tiles
+// actually land. Fixed with two overlapping raster layers instead of one:
+// whichever is "front" shows the current year at full opacity, the other
+// sits at opacity 0 while its tiles load, and once the hidden layer's
+// tiles have actually finished loading (not just "probably by now") the
+// two swap via an opacity transition (raster layers support this
+// natively, so the fade itself needs no manual animation loop).
+// ERA5_ANNUAL_MAX_WAIT_MS is only a safety net for the rare case the load
+// event never fires cleanly (e.g. requests aborted by fast scrubbing).
 const ERA5_ANNUAL_FADE_MS = 600
-const ERA5_ANNUAL_FADE_DELAY_MS = 150
+const ERA5_ANNUAL_MAX_WAIT_MS = 2500
 
 function ensureEra5AnnualLayers(map, tileUrl, visible, opacity, attribution, beforeId) {
   if (map.getSource('era5-annual-0')) return // already set up
@@ -313,22 +275,97 @@ function ensureEra5AnnualLayers(map, tileUrl, visible, opacity, attribution, bef
   }
 }
 
-function crossfadeEra5Annual(map, tileUrl, opacity, activeSlotRef, fadeTimeoutRef) {
+function crossfadeEra5Annual(map, tileUrl, opacity, activeSlotRef, fadeTimeoutRef, loadListenerRef) {
   const activeSlot = activeSlotRef.current
   const hiddenSlot = activeSlot === 0 ? 1 : 0
-  const hiddenSource = map.getSource(`era5-annual-${hiddenSlot}`)
+  const hiddenSourceId = `era5-annual-${hiddenSlot}`
+  const hiddenSource = map.getSource(hiddenSourceId)
   if (!hiddenSource) return
+
+  // Cancel any still-pending wait from a step the user has already moved
+  // past (fast scrubbing), rather than letting stacked timeouts/listeners
+  // fight over which layer ends up on top.
+  if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current)
+  if (loadListenerRef.current) map.off('sourcedata', loadListenerRef.current)
+
   hiddenSource.setTiles([tileUrl])
 
-  // Cancel any still-pending fade from a step the user has already moved
-  // past (fast scrubbing), rather than letting stacked timeouts fight
-  // over which layer ends up on top.
-  if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current)
-  fadeTimeoutRef.current = setTimeout(() => {
+  const runFade = () => {
+    clearTimeout(fadeTimeoutRef.current)
+    map.off('sourcedata', onSourceData)
+    loadListenerRef.current = null
     map.setPaintProperty(`era5-annual-${hiddenSlot}-layer`, 'raster-opacity', opacity)
     map.setPaintProperty(`era5-annual-${activeSlot}-layer`, 'raster-opacity', 0)
     activeSlotRef.current = hiddenSlot
-  }, ERA5_ANNUAL_FADE_DELAY_MS)
+  }
+
+  // Fade in only once the hidden layer's own tiles have actually finished
+  // loading for the current viewport -- fading on a timer instead pops
+  // once the (still downloading) tiles land underneath the fade.
+  function onSourceData(e) {
+    if (e.sourceId !== hiddenSourceId || !map.isSourceLoaded(hiddenSourceId)) return
+    runFade()
+  }
+  map.on('sourcedata', onSourceData)
+  loadListenerRef.current = onSourceData
+
+  fadeTimeoutRef.current = setTimeout(runFade, ERA5_ANNUAL_MAX_WAIT_MS)
+}
+
+// Per-year prefetch, so playback/scrubbing hits the browser's own HTTP
+// tile cache instead of a fresh Earth Engine round trip on every step --
+// this is what actually removes the stutter, since crossfadeEra5Annual
+// above can only fade in smoothly once a year's tiles exist somewhere.
+// Runs on a third, permanently-invisible layer (raster-opacity 0, but
+// visibility 'visible' -- Mapbox only fetches/renders a source when some
+// layer actually uses it, opacity doesn't affect that) so it can warm the
+// cache for every year one at a time without disturbing what's on screen.
+// Only warms tiles for the current viewport -- panning/zooming afterward
+// still needs fresh fetches for the new view, same as any raster layer.
+const ERA5_ANNUAL_PRELOAD_TIMEOUT_MS = 4000
+
+function ensureEra5AnnualPreloadLayer(map, firstTileUrl) {
+  if (map.getSource('era5-annual-preload')) return
+  map.addSource('era5-annual-preload', {
+    type: 'raster',
+    tiles: [firstTileUrl],
+    tileSize: 256,
+  })
+  map.addLayer({
+    id: 'era5-annual-preload-layer',
+    type: 'raster',
+    source: 'era5-annual-preload',
+    layout: { visibility: 'visible' },
+    paint: { 'raster-opacity': 0 },
+  })
+}
+
+async function preloadEra5AnnualYears(map, tiles, isCancelled, isLayerWanted) {
+  if (tiles.length === 0) return
+  ensureEra5AnnualPreloadLayer(map, tiles[0].tileUrlTemplate)
+  const source = map.getSource('era5-annual-preload')
+
+  for (const { tileUrlTemplate } of tiles) {
+    if (isCancelled() || !isLayerWanted()) return
+    // eslint-disable-next-line no-await-in-loop -- deliberately sequential,
+    // one year at a time, so this doesn't flood Earth Engine's tile server.
+    await new Promise((resolve) => {
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
+        map.off('sourcedata', onSourceData)
+        clearTimeout(timeoutId)
+        resolve()
+      }
+      function onSourceData(e) {
+        if (e.sourceId === 'era5-annual-preload' && map.isSourceLoaded('era5-annual-preload')) finish()
+      }
+      map.on('sourcedata', onSourceData)
+      const timeoutId = setTimeout(finish, ERA5_ANNUAL_PRELOAD_TIMEOUT_MS)
+      source.setTiles([tileUrlTemplate])
+    })
+  }
 }
 
 export default function MapView({
@@ -337,6 +374,7 @@ export default function MapView({
   era5AnnualVisible,
   era5AnnualOpacity,
   era5AnnualTileUrl,
+  era5AnnualTiles,
   boundaryVisible,
   pkNationalVisible,
   pkProvincesVisible,
@@ -358,7 +396,6 @@ export default function MapView({
   sensorsFocus2026Visible,
   sensorsGmrcWapdaVisible,
   riversVisible,
-  rgi7HkhRegionsVisible,
 }) {
   const pkVisible = { national: pkNationalVisible, provinces: pkProvincesVisible, districts: pkDistrictsVisible }
   const sensorsVisible = {
@@ -380,17 +417,19 @@ export default function MapView({
   // crossfadeEra5Annual below) is currently the visible one -- a ref, not
   // state, since flipping it shouldn't itself trigger a re-render.
   const era5AnnualActiveSlotRef = useRef(0)
-  // The in-flight "let tiles start loading before fading" timer, so a fast
-  // scrub through years cancels the previous step's fade instead of
-  // stacking them.
+  // The in-flight "wait for the hidden layer's tiles to actually finish
+  // loading" timer (safety-net fallback) and the 'sourcedata' listener
+  // it's racing against, so a fast scrub through years cancels the
+  // previous step's wait instead of stacking them.
   const era5AnnualFadeTimeoutRef = useRef(null)
+  const era5AnnualLoadListenerRef = useRef(null)
 
   // Mirrored into a ref (rather than closed over) so that addOverlayLayers --
   // called fresh from 'style.load' every time the basemap switches, long
   // after the mount effect's closure was created -- always sees the current
   // toggle state instead of whatever was true when the map was first built.
   const stateRef = useRef({})
-  stateRef.current = { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, landcoverEsriTileUrl, landcoverEsriVisible, landcoverEsriOpacity, sensorsVisible, riversVisible, rgi7HkhRegionsVisible }
+  stateRef.current = { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, landcoverEsriTileUrl, landcoverEsriVisible, landcoverEsriOpacity, sensorsVisible, riversVisible }
 
   // One-time map setup.
   useEffect(() => {
@@ -460,7 +499,7 @@ export default function MapView({
     // markers, boundaries, and ERA5 overlay survive a basemap switch.
     function addOverlayLayers() {
       if (map.getSource('hkh-boundary')) return // already (re)built for this style
-      const { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, landcoverEsriTileUrl, landcoverEsriVisible, landcoverEsriOpacity, sensorsVisible, riversVisible, rgi7HkhRegionsVisible } = stateRef.current
+      const { boundaryVisible, pkVisible, era5AnnualTileUrl, era5AnnualVisible, era5AnnualOpacity, buildingsVisible, buildingsIndex, popRasterTileUrl, popRasterVisible, popRasterOpacity, landcoverEsriTileUrl, landcoverEsriVisible, landcoverEsriOpacity, sensorsVisible, riversVisible } = stateRef.current
 
       // HKH study area boundary (projects/endless-gamma-379613/assets/HKH) --
       // added before the glacier marker layers so it renders beneath them.
@@ -657,7 +696,6 @@ export default function MapView({
       })
 
       if (riversVisible) addRiversLayer(map, 'cluster-dots') // else: not toggled on, don't fetch until asked
-      if (rgi7HkhRegionsVisible) addRgi7HkhRegionsLayer(map, 'cluster-dots') // else: not toggled on, don't fetch until asked
     }
 
     map.on('style.load', () => {
@@ -771,7 +809,7 @@ export default function MapView({
 
     const apply = () => {
       if (map.getSource('era5-annual-0')) {
-        crossfadeEra5Annual(map, era5AnnualTileUrl, era5AnnualOpacity, era5AnnualActiveSlotRef, era5AnnualFadeTimeoutRef)
+        crossfadeEra5Annual(map, era5AnnualTileUrl, era5AnnualOpacity, era5AnnualActiveSlotRef, era5AnnualFadeTimeoutRef, era5AnnualLoadListenerRef)
         return
       }
       const beforeId = map.getLayer('cluster-dots') ? 'cluster-dots' : undefined
@@ -786,12 +824,43 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [era5AnnualTileUrl])
 
-  // Cancel any pending cross-fade on unmount so it can't fire after the
-  // map/layers are gone.
+  // Background-prefetch every year's tiles as soon as the full batch is
+  // known, so by the time the user actually plays or scrubs, most years
+  // are already sitting in the browser's HTTP cache -- see
+  // preloadEra5AnnualYears above for why this is what actually fixes the
+  // stutter (crossfadeEra5Annual can only fade smoothly into tiles that
+  // already exist somewhere). Bails early, mid-loop, if the layer gets
+  // toggled off, and only warms tiles for the viewport at the time it
+  // runs -- panning/zooming after still needs fresh fetches.
+  useEffect(() => {
+    const map = mapRef.current
+    const tiles = Object.values(era5AnnualTiles || {}).sort((a, b) => a.year - b.year)
+    if (!map || tiles.length === 0) return
+
+    let cancelled = false
+    const apply = () => {
+      preloadEra5AnnualYears(map, tiles, () => cancelled, () => stateRef.current.era5AnnualVisible)
+    }
+    if (map.isStyleLoaded()) {
+      apply()
+    } else {
+      map.once('load', apply)
+    }
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [era5AnnualTiles])
+
+  // Cancel any pending cross-fade (timer and listener) on unmount so
+  // neither can fire after the map/layers are gone.
   useEffect(() => {
     return () => {
       if (era5AnnualFadeTimeoutRef.current) clearTimeout(era5AnnualFadeTimeoutRef.current)
+      const map = mapRef.current
+      if (map && era5AnnualLoadListenerRef.current) map.off('sourcedata', era5AnnualLoadListenerRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Sync annual-temperature layer visibility with the toggle -- both
@@ -995,29 +1064,6 @@ export default function MapView({
       map.once('load', apply)
     }
   }, [riversVisible])
-
-  // RGI7 HKH glaciated-region outline -- same lazy pattern as rivers above.
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map) return
-
-    const apply = () => {
-      if (map.getLayer('rgi7-hkh-regions-line')) {
-        const visibility = rgi7HkhRegionsVisible ? 'visible' : 'none'
-        map.setLayoutProperty('rgi7-hkh-regions-fill', 'visibility', visibility)
-        map.setLayoutProperty('rgi7-hkh-regions-line', 'visibility', visibility)
-        return
-      }
-      if (!rgi7HkhRegionsVisible) return // nothing to hide -- don't fetch until asked
-      addRgi7HkhRegionsLayer(map, map.getLayer('cluster-dots') ? 'cluster-dots' : undefined)
-    }
-
-    if (map.isStyleLoaded()) {
-      apply()
-    } else {
-      map.once('load', apply)
-    }
-  }, [rgi7HkhRegionsVisible])
 
   // Building footprints -- same lazy, "don't fetch until asked" pattern as
   // the Pakistan boundaries above: the ~160 district sources are only

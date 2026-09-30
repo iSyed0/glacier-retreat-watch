@@ -56,15 +56,6 @@ SENSOR_FILES = {
 # GeoJSON (see rivers/rivers.qmd for the original QGIS layer metadata).
 RIVERS_FILE = BASE_DIR.parent / "rivers" / "rivers.geojson"
 
-# RGI 7.0's Hindu Kush Himalaya glaciated-region outline -- 3 O1 (first-
-# order) region polygons (Central Asia, South Asia West, South Asia East)
-# from the GTN-G region-boundary product RGI7 defines its regions against
-# (see rgi7/SOURCE.md for provenance). A boundary of where RGI7 draws its
-# regions, not individual glacier/complex outlines -- distinct from both
-# BOUNDARY_FILE (this app's own HKH study-area outline) and the point
-# glaciers in GLACIERS_FILE.
-RGI7_HKH_REGIONS_FILE = BASE_DIR.parent / "rgi7" / "hkh_o1regions.geojson"
-
 # Country codes referenced in the glacier dataset.
 COUNTRY_NAMES = {
     "AF": "Afghanistan",
@@ -202,16 +193,6 @@ def rivers():
     if not RIVERS_FILE.exists():
         raise HTTPException(status_code=503, detail=f"Rivers file not available: {RIVERS_FILE.name}")
     return FileResponse(RIVERS_FILE, media_type="application/geo+json", headers=STATIC_GEOJSON_HEADERS)
-
-
-@app.get("/api/rgi7/hkh-regions")
-def rgi7_hkh_regions():
-    """RGI7's Hindu Kush Himalaya glaciated-region outline (see
-    RGI7_HKH_REGIONS_FILE above) -- served straight off disk like the
-    other static GeoJSON layers."""
-    if not RGI7_HKH_REGIONS_FILE.exists():
-        raise HTTPException(status_code=503, detail=f"RGI7 regions file not available: {RGI7_HKH_REGIONS_FILE.name}")
-    return FileResponse(RGI7_HKH_REGIONS_FILE, media_type="application/geo+json", headers=STATIC_GEOJSON_HEADERS)
 
 
 @app.get("/api/buildings/index")
