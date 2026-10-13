@@ -14,7 +14,7 @@ function Chevron({ open }) {
 
 function ChartRowIcon({ variant }) {
   const common = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2.2, strokeLinecap: 'round', strokeLinejoin: 'round', width: 16, height: 16 }
-  if (variant === 'mass') return <svg {...common}><path d="M12 3v11" /><polyline points="8 10 12 14 16 10" /><rect x="4" y="17" width="16" height="4" rx="1" /></svg>
+  if (variant === 'specificMass') return <svg {...common}><path d="M12 3v11" /><polyline points="8 10 12 14 16 10" /><rect x="4" y="17" width="16" height="4" rx="1" /></svg>
   return <svg {...common}><polyline points="3 17 9 11 13 15 21 6" /><polyline points="15 6 21 6 21 12" /></svg>
 }
 

@@ -93,6 +93,44 @@ def get_tile_for_year(year: int):
     }
 
 
+class Era5AnnualYearInvalid(ValueError):
+    """Raised for a year outside MIN_YEAR-MAX_YEAR."""
+
+
+# Snap hover coordinates to ERA5-Land's own 0.1-degree grid before
+# querying, so repeatedly hovering within the same ~10km cell hits the
+# in-process cache instead of a fresh Earth Engine round trip every time
+# -- the data has no finer spatial detail than this anyway, so snapping
+# loses nothing.
+GRID_DEG = 0.1
+
+
+def _snap(value: float, step: float) -> float:
+    return round(value / step) * step
+
+
+@lru_cache(maxsize=4096)
+def _point_temp_c(snapped_lon: float, snapped_lat: float, year: int):
+    coll = _collection()
+    start = ee.Date.fromYMD(year, 1, 1)
+    end = start.advance(1, "year")
+    mean_c = coll.filterDate(start, end).mean().subtract(273.15)
+    point = ee.Geometry.Point([snapped_lon, snapped_lat])
+    return mean_c.reduceRegion(
+        reducer=ee.Reducer.first(), geometry=point, scale=11132
+    ).get(BAND).getInfo()
+
+
+def get_point_temp(lon: float, lat: float, year: int):
+    """Mean annual 2m air temperature (deg C) at (lon, lat) for `year`, or
+    None over nodata. Same underlying collection/year-averaging as
+    get_tile_for_year, just sampled at a point instead of rendered as a
+    tile."""
+    if not (MIN_YEAR <= year <= MAX_YEAR):
+        raise Era5AnnualYearInvalid(f"year must be {MIN_YEAR}-{MAX_YEAR}")
+    return _point_temp_c(_snap(lon, GRID_DEG), _snap(lat, GRID_DEG), year)
+
+
 @lru_cache(maxsize=1)
 def get_all_tiles():
     """Every year's tile in one call, computed concurrently -- the frontend

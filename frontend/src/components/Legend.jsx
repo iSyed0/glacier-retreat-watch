@@ -102,6 +102,8 @@ export default function Legend({
   onToggleSensorsGmrcWapda,
   riversVisible,
   onToggleRivers,
+  hoverInfoVisible,
+  onToggleHoverInfo,
 }) {
   const era5AnnualGradient = era5Annual ? `linear-gradient(to right, ${era5Annual.palette.map((c) => '#' + c).join(',')})` : ''
   const popRasterGradient = popRaster ? `linear-gradient(to right, ${popRaster.palette.map((c) => '#' + c).join(',')})` : ''
@@ -216,7 +218,7 @@ export default function Legend({
           <div className="legend-section">
             <div className="legend-row"><span className="dot" /> Glacier location</div>
             <div className="legend-row"><span className="ring red" /> Retreating / thinning</div>
-            <div className="legend-row"><span className="ring blue" /> Stable / gaining</div>
+            <div className="legend-row"><span className="ring blue" /> Balanced</div>
             <div className="legend-hint">Numbered circles are clusters — click or zoom in</div>
           </div>
 
@@ -416,6 +418,13 @@ export default function Legend({
                 )}
               </>
             )}
+
+            <LayerRow
+              swatch={dotSwatch('#4dd9ff')}
+              label="Temperature & elevation on hover"
+              checked={hoverInfoVisible}
+              onChange={onToggleHoverInfo}
+            />
           </div>
         </div>
       )}

@@ -6,19 +6,25 @@ and (in production) serves the built frontend static files too, so a single
 process/port runs the whole app.
 """
 
+import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 import buildings
+import elevation
 import era5_annual
 import landcover
+import nearest_glacier
 import population_raster
 import trends
+from chat import agent as chat_agent
+from chat import lmstudio
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -107,7 +113,7 @@ app = FastAPI(title="HKH Glacier Watch API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -252,27 +258,6 @@ def glacier_temperature_trends_pakistan():
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
 
 
-@app.get("/api/mass-balance")
-def glacier_mass_balance_trends():
-    """Region-wide glacier mass-balance rate (Gt/yr, from summed volume
-    change converted via a standard ice-density assumption) vs. mean
-    temperature, same periods as /api/trends -- see trends.py."""
-    try:
-        return trends.get_mass_balance_trends()
-    except trends.TrendsUnavailable as exc:
-        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
-
-
-@app.get("/api/mass-balance/pk")
-def glacier_mass_balance_trends_pakistan():
-    """Same as /api/mass-balance, scoped to glaciers inside Pakistan and to
-    the Pakistan portion of the HKH boundary for the temperature series."""
-    try:
-        return trends.get_mass_balance_trends(country="PK")
-    except trends.TrendsUnavailable as exc:
-        raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
-
-
 @app.get("/api/era5-annual/range")
 def era5_annual_range():
     """The earliest/latest years the annual temperature layer will query."""
@@ -290,6 +275,106 @@ def era5_annual_tiles():
         return era5_annual.get_all_tiles()
     except era5_annual.Era5AnnualUnavailable as exc:
         raise HTTPException(status_code=503, detail=f"Earth Engine unavailable: {exc}")
+
+
+@app.get("/api/hover-info")
+def hover_info(lon: float, lat: float, year: int = era5_annual.MAX_YEAR):
+    """Temperature (deg C, same year the annual-temperature slider is on)
+    and elevation (m) at a single point -- backs the Legend's "temperature
+    & elevation on hover" toggle. Both are independent point lookups (not
+    tied to the colored temperature layer being visible), each cached
+    server-side on its own dataset's native grid (see era5_annual.GRID_DEG /
+    elevation.GRID_DEG) so repeatedly hovering the same spot is instant
+    after the first query there."""
+    try:
+        temp_c = era5_annual.get_point_temp(lon, lat, year)
+    except era5_annual.Era5AnnualYearInvalid as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except era5_annual.Era5AnnualUnavailable:
+        temp_c = None
+
+    try:
+        elevation_m = elevation.get_point_elevation(lon, lat)
+    except elevation.ElevationUnavailable:
+        elevation_m = None
+
+    return {"tempC": temp_c, "elevationM": elevation_m}
+
+
+@app.get("/api/nearest-glacier")
+def nearest_glacier_lookup(lon: float, lat: float, trend: int, max_km: float = 50.0):
+    """The closest glacier with the given trend (-1 retreating, 1
+    balanced, 0 no significant trend) to (lon, lat) -- backs
+    TerrainView.jsx's second fly-to stop (a retreating glacier's nearest
+    balanced neighbor, or vice versa). null if nothing qualifies within
+    max_km."""
+    if trend not in (-1, 0, 1):
+        raise HTTPException(status_code=400, detail="trend must be -1, 0, or 1")
+    return nearest_glacier.find_nearest(lon, lat, trend, max_km=max_km)
+
+
+class ChatTurn(BaseModel):
+    role: str
+    text: str = ""
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatTurn] = []
+    uiState: dict = {}
+
+
+@app.post("/api/chat")
+def chat(req: ChatRequest):
+    """One chatbot turn against the local LM Studio model (see chat/),
+    streamed as Server-Sent Events: status updates while the model loads /
+    reads / writes, then a single `reply` event with the text, validated
+    map actions and data blocks -- or an `error` event."""
+    def events():
+        for ev in chat_agent.run(req.message, [t.model_dump() for t in req.history], req.uiState, COUNTRY_NAMES):
+            yield f"event: {ev['type']}\ndata: {json.dumps(ev, separators=(',', ':'))}\n\n"
+
+    # Content-Encoding: identity makes GZipMiddleware pass this through
+    # untouched -- gzipping a stream buffers it, so status events would only
+    # arrive all at once at the end.
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "Content-Encoding": "identity"})
+
+
+@app.get("/api/chat/status")
+def chat_status():
+    """Whether LM Studio is reachable and the chatbot model is loaded with
+    enough context (state: missing | not_loaded | ready)."""
+    try:
+        return lmstudio.model_status()
+    except lmstudio.LMStudioUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@app.post("/api/chat/model/load")
+def chat_model_load():
+    """Load the chatbot model in LM Studio (no-op if a big-enough instance is already loaded)."""
+    try:
+        return {"instanceId": lmstudio.ensure_instance()}
+    except lmstudio.LMStudioUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@app.post("/api/chat/model/download")
+def chat_model_download():
+    """Start downloading the chatbot model in LM Studio; poll the job below."""
+    try:
+        return lmstudio.download_model()
+    except lmstudio.LMStudioUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@app.get("/api/chat/model/download/{job_id}")
+def chat_model_download_status(job_id: str):
+    try:
+        return lmstudio.download_status(job_id)
+    except lmstudio.LMStudioUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 # In production, serve the built React app for everything else.

@@ -48,7 +48,11 @@ ERA5_SCALE_M = 11132  # ERA5-Land's native ~0.1 degree resolution
 # change to mass change (Huss, 2013; the same value Hugonnet et al. 2021
 # use for their own region-scale mass-change figures) -- a methodological
 # choice, not a measured constant, so it's surfaced in the API response.
+# Same constants (and formula, below) as frontend/src/glacierMassBalance.js
+# uses for a single glacier's "Mass balance (est.)" figure -- kept in sync
+# by hand since this is Python and that's JS; same density, same answer.
 ICE_DENSITY_KG_M3 = 850
+WATER_DENSITY_KG_M3 = 1000
 
 
 class TrendsUnavailable(RuntimeError):
@@ -61,7 +65,11 @@ def get_glacier_trend(country=None):
     period, across every glacier in the dataset that has a figure for it --
     or, if `country` is given (an RGI/ISO2 code like "PK"), just the
     glaciers whose `country` property matches. Pure local computation over
-    glaciers.geojson -- no network call."""
+    glaciers.geojson -- no network call. Also includes
+    specificMassBalanceMWeYr, the same rate converted to specific mass
+    balance (m w.e./yr) -- the region-wide time series of exactly the
+    "Mass balance (est.)" figure DataSheet.jsx shows per glacier, same
+    formula (elevationChangeRateM * ICE_DENSITY_KG_M3 / WATER_DENSITY_KG_M3)."""
     with open(GLACIERS_FILE, encoding="utf-8") as f:
         gj = json.load(f)
 
@@ -88,59 +96,14 @@ def get_glacier_trend(country=None):
             area_sum += area
             count += 1
 
+        elevation_change_rate_m = (weighted_sum / area_sum) if area_sum else None
         results.append({
             "startYear": start,
             "endYear": end,
-            "elevationChangeRateM": (weighted_sum / area_sum) if area_sum else None,
-            "glacierCount": count,
-            "totalAreaKm2": area_sum,
-        })
-    return results
-
-
-@lru_cache(maxsize=None)
-def get_mass_balance_trend(country=None):
-    """Annualized mass-balance rate (Gt/yr) per period, across every glacier
-    in the dataset that has a figure for it (or just one country's, as with
-    get_glacier_trend). Unlike the elevation-change rate above, this sums
-    each glacier's actual volume change (the `p` field's 4th element, Mm3 --
-    see DataSheet.jsx, which labels it "Vol. Delta") rather than averaging a
-    per-area rate, so it reflects total ice lost, not a "typical glacier"
-    figure. Converted to mass via ICE_DENSITY_KG_M3. Pure local computation
-    over glaciers.geojson -- no network call."""
-    with open(GLACIERS_FILE, encoding="utf-8") as f:
-        gj = json.load(f)
-
-    results = []
-    for start, end in PERIODS + [PROJECTED_PERIOD]:
-        field = "pRecent" if (start, end) == PROJECTED_PERIOD else "p"
-        volume_sum_mm3 = 0.0  # Mm3 (10^6 m3)
-        area_sum = 0.0
-        count = 0
-        for feat in gj["features"]:
-            props = feat["properties"]
-            if country is not None and props.get("country") != country:
-                continue
-            periods = props.get(field)
-            if not periods:
-                continue
-            match = next((row for row in periods if row[0] == start and row[1] == end), None)
-            if not match:
-                continue
-            _, _, _, volume_change, area = match
-            if volume_change is None or area is None:
-                continue
-            volume_sum_mm3 += volume_change
-            area_sum += area
-            count += 1
-
-        # Mm3 -> m3 (*1e6) -> kg (*density) -> Gt (/1e12), then annualized.
-        mass_change_gt = volume_sum_mm3 * 1e6 * ICE_DENSITY_KG_M3 / 1e12
-        years = end - start
-        results.append({
-            "startYear": start,
-            "endYear": end,
-            "massBalanceRateGtYr": (mass_change_gt / years) if area_sum else None,
+            "elevationChangeRateM": elevation_change_rate_m,
+            "specificMassBalanceMWeYr": (
+                elevation_change_rate_m * ICE_DENSITY_KG_M3 / WATER_DENSITY_KG_M3
+            ) if elevation_change_rate_m is not None else None,
             "glacierCount": count,
             "totalAreaKm2": area_sum,
         })
@@ -192,15 +155,4 @@ def get_trends(country=None):
     return [
         {**g, "meanTempC": temperature.get((g["startYear"], g["endYear"]))}
         for g in get_glacier_trend(country)
-    ]
-
-
-def get_mass_balance_trends(country=None):
-    """Mass-balance-rate + temperature, joined period-by-period -- the same
-    shape as get_trends(), just with massBalanceRateGtYr instead of
-    elevationChangeRateM."""
-    temperature = {(t["startYear"], t["endYear"]): t["meanTempC"] for t in get_temperature_trend(country)}
-    return [
-        {**m, "meanTempC": temperature.get((m["startYear"], m["endYear"]))}
-        for m in get_mass_balance_trend(country)
     ]

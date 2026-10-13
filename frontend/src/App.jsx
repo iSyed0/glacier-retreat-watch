@@ -3,11 +3,14 @@ import './App.css'
 import MapView from './components/MapView'
 import Legend from './components/Legend'
 import AnnualTimeSlider from './components/AnnualTimeSlider'
-import DataSheet from './components/DataSheet'
+import DataSheet, { toTerrainFeature } from './components/DataSheet'
+import TerrainView from './components/TerrainView'
 import BasemapSwitcher from './components/BasemapSwitcher'
 import TrendsPanelStats from './components/TrendsPanelStats'
 import ChartsPanel from './components/ChartsPanel'
 import { DEFAULT_MAP_STYLE_ID } from './mapStyles'
+import ChatPanel from './chat/ChatPanel'
+import { applyChatActions, buildUiState, openGlacier } from './chat/actions'
 
 // One entry per chart the floating Charts panel can open -- add a chart by
 // adding a row here; ChartsPanel's list and the modals below are both
@@ -34,22 +37,22 @@ const CHART_DEFS = [
     scopeNote: 'every glacier inside Pakistan',
   },
   {
-    key: 'massHkh',
-    endpoint: '/api/mass-balance',
-    variant: 'mass',
-    rowTitle: 'Mass balance + temperature',
+    key: 'specificMassHkh',
+    endpoint: '/api/trends',
+    variant: 'specificMass',
+    rowTitle: 'Specific mass balance + temperature',
     region: 'HKH region',
-    title: 'Glacier mass balance vs. temperature',
+    title: 'Glacier specific mass balance vs. temperature',
     sub: 'HKH region · 1999–2019 measured, 2020–2026 WGMS AMCE update',
     scopeNote: 'every HKH glacier',
   },
   {
-    key: 'massPk',
-    endpoint: '/api/mass-balance/pk',
-    variant: 'mass',
-    rowTitle: 'Mass balance + temperature',
+    key: 'specificMassPk',
+    endpoint: '/api/trends/pk',
+    variant: 'specificMass',
+    rowTitle: 'Specific mass balance + temperature',
     region: 'Pakistan',
-    title: 'Glacier mass balance vs. temperature — Pakistan',
+    title: 'Glacier specific mass balance vs. temperature — Pakistan',
     sub: 'Pakistan (HKH) · 1999–2019 measured, 2020–2026 WGMS AMCE update',
     scopeNote: 'every glacier inside Pakistan',
   },
@@ -58,9 +61,11 @@ const CHART_DEFS = [
 export default function App() {
   const [config, setConfig] = useState(null)
   const [selectedFeature, setSelectedFeature] = useState(null)
+  const [terrainViewFeature, setTerrainViewFeature] = useState(null)
   const [logoError, setLogoError] = useState(false)
   const [mapStyleId, setMapStyleId] = useState(DEFAULT_MAP_STYLE_ID)
   const [recenterSignal, setRecenterSignal] = useState(0)
+  const [flyToTarget, setFlyToTarget] = useState(null) // { lon, lat, zoom, seq } -- set by the chatbot
 
   const [era5AnnualVisible, setEra5AnnualVisible] = useState(false)
   const [era5AnnualOpacity, setEra5AnnualOpacity] = useState(0.65)
@@ -90,6 +95,7 @@ export default function App() {
   const [sensorsFocus2026Visible, setSensorsFocus2026Visible] = useState(false)
   const [sensorsGmrcWapdaVisible, setSensorsGmrcWapdaVisible] = useState(false)
   const [riversVisible, setRiversVisible] = useState(false)
+  const [hoverInfoVisible, setHoverInfoVisible] = useState(false)
   const [landcoverEsriVisible, setLandcoverEsriVisible] = useState(false)
   const [landcoverEsriOpacity, setLandcoverEsriOpacity] = useState(0.7)
   const [landcoverEsriTile, setLandcoverEsriTile] = useState(null) // { tileUrlTemplate, year }
@@ -264,6 +270,73 @@ export default function App() {
   // not fetched, so selecting/scrubbing/playing a year is instant.
   const era5AnnualTile = era5AnnualYear != null ? era5AnnualTiles[era5AnnualYear] || null : null
 
+  // Chatbot -> portal. Keys match CHAT_LAYERS in chat/actions.js; these
+  // are the same setters the Legend's toggles call, so a chatbot action is
+  // indistinguishable from the user clicking.
+  const layerSetters = {
+    boundary: setBoundaryVisible,
+    pkNational: setPkNationalVisible,
+    pkProvinces: setPkProvincesVisible,
+    pkDistricts: setPkDistrictsVisible,
+    buildings: setBuildingsVisible,
+    popRaster: setPopRasterVisible,
+    landcoverEsri: setLandcoverEsriVisible,
+    era5Annual: setEra5AnnualVisible,
+    rivers: setRiversVisible,
+    hoverInfo: setHoverInfoVisible,
+    sensorsGlof2: setSensorsGlof2Visible,
+    sensorsGlof2Damaged: setSensorsGlof2DamagedVisible,
+    sensorsBriFf: setSensorsBriFfVisible,
+    sensorsFocus2026: setSensorsFocus2026Visible,
+    sensorsGmrcWapda: setSensorsGmrcWapdaVisible,
+  }
+  const opacitySetters = {
+    era5Annual: setEra5AnnualOpacity,
+    popRaster: setPopRasterOpacity,
+    landcoverEsri: setLandcoverEsriOpacity,
+  }
+  const chatHandlers = {
+    setLayer: (key, on) => layerSetters[key]?.(on),
+    setOpacity: (key, value) => opacitySetters[key]?.(value),
+    setBasemap: setMapStyleId,
+    setYear: (year) => setEra5AnnualYear(
+      era5AnnualRange ? Math.min(era5AnnualRange.max, Math.max(era5AnnualRange.min, year)) : year
+    ),
+    setPlaying: setEra5AnnualPlaying,
+    flyTo: (target) => setFlyToTarget((prev) => ({ ...target, seq: (prev?.seq || 0) + 1 })),
+    fitHkh: () => setRecenterSignal((n) => n + 1),
+    openChart,
+    openGlacier: setSelectedFeature,
+    openTerrain: (feature) => setTerrainViewFeature(toTerrainFeature(feature, config?.countryNames || {})),
+    closeGlacier: () => {
+      setSelectedFeature(null)
+      setTerrainViewFeature(null)
+    },
+  }
+  const chatUiState = buildUiState({
+    visible: {
+      boundary: boundaryVisible,
+      pkNational: pkNationalVisible,
+      pkProvinces: pkProvincesVisible,
+      pkDistricts: pkDistrictsVisible,
+      buildings: buildingsVisible,
+      popRaster: popRasterVisible,
+      landcoverEsri: landcoverEsriVisible,
+      era5Annual: era5AnnualVisible,
+      rivers: riversVisible,
+      hoverInfo: hoverInfoVisible,
+      sensorsGlof2: sensorsGlof2Visible,
+      sensorsGlof2Damaged: sensorsGlof2DamagedVisible,
+      sensorsBriFf: sensorsBriFfVisible,
+      sensorsFocus2026: sensorsFocus2026Visible,
+      sensorsGmrcWapda: sensorsGmrcWapdaVisible,
+    },
+    basemap: mapStyleId,
+    year: era5AnnualYear,
+    zoom: mapZoom,
+    glacierId: selectedFeature?.properties?.id,
+  })
+
   return (
     <div id="app">
       <div id="topbar">
@@ -294,6 +367,7 @@ export default function App() {
           buildingsIndex={buildingsIndex}
           onFeatureClick={setSelectedFeature}
           recenterSignal={recenterSignal}
+          flyToTarget={flyToTarget}
           onZoomChange={setMapZoom}
           popRasterVisible={popRasterVisible}
           popRasterOpacity={popRasterOpacity}
@@ -307,6 +381,8 @@ export default function App() {
           sensorsFocus2026Visible={sensorsFocus2026Visible}
           sensorsGmrcWapdaVisible={sensorsGmrcWapdaVisible}
           riversVisible={riversVisible}
+          hoverInfoVisible={hoverInfoVisible}
+          hoverInfoYear={era5AnnualYear}
         />
       )}
 
@@ -360,6 +436,8 @@ export default function App() {
           onToggleSensorsGmrcWapda={setSensorsGmrcWapdaVisible}
           riversVisible={riversVisible}
           onToggleRivers={setRiversVisible}
+          hoverInfoVisible={hoverInfoVisible}
+          onToggleHoverInfo={setHoverInfoVisible}
         />
         <AnnualTimeSlider
           visible={era5AnnualVisible}
@@ -376,8 +454,11 @@ export default function App() {
           feature={selectedFeature}
           countryNames={config?.countryNames || {}}
           onClose={() => setSelectedFeature(null)}
+          onOpenTerrainView={setTerrainViewFeature}
         />
       </div>
+
+      <TerrainView feature={terrainViewFeature} onClose={() => setTerrainViewFeature(null)} />
 
       <ChartsPanel
         charts={CHART_DEFS.map((d) => ({
@@ -404,6 +485,12 @@ export default function App() {
           variant={d.variant}
         />
       ))}
+
+      <ChatPanel
+        uiState={chatUiState}
+        onActions={(actions) => applyChatActions(actions, chatHandlers)}
+        onOpenGlacier={(feature) => openGlacier(feature, chatHandlers)}
+      />
     </div>
   )
 }

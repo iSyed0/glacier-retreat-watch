@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { MAP_STYLES } from '../mapStyles'
@@ -383,6 +383,7 @@ export default function MapView({
   buildingsIndex,
   onFeatureClick,
   recenterSignal,
+  flyToTarget,
   onZoomChange,
   popRasterVisible,
   popRasterOpacity,
@@ -396,6 +397,8 @@ export default function MapView({
   sensorsFocus2026Visible,
   sensorsGmrcWapdaVisible,
   riversVisible,
+  hoverInfoVisible,
+  hoverInfoYear,
 }) {
   const pkVisible = { national: pkNationalVisible, provinces: pkProvincesVisible, districts: pkDistrictsVisible }
   const sensorsVisible = {
@@ -423,6 +426,16 @@ export default function MapView({
   // previous step's wait instead of stacking them.
   const era5AnnualFadeTimeoutRef = useRef(null)
   const era5AnnualLoadListenerRef = useRef(null)
+
+  // Temperature/elevation-on-hover toggle -- hoverInfo is the last point
+  // queried (or being queried); hoverInfoTimeoutRef is the pending debounce
+  // timer; hoverInfoYearRef tracks the slider's current year without
+  // forcing the mousemove listener to be torn down and re-attached every
+  // time the year changes (see the effect below).
+  const [hoverInfo, setHoverInfo] = useState(null)
+  const hoverInfoTimeoutRef = useRef(null)
+  const hoverInfoYearRef = useRef(hoverInfoYear)
+  hoverInfoYearRef.current = hoverInfoYear
 
   // Mirrored into a ref (rather than closed over) so that addOverlayLayers --
   // called fresh from 'style.load' every time the basemap switches, long
@@ -799,6 +812,16 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recenterSignal])
 
+  // Chatbot "fly to" (a place, or a glacier it just opened). `seq` changes
+  // on every request, so flying to the same spot twice still re-triggers.
+  // Same auto-spin cancel as the recenter above.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !flyToTarget) return
+    spinEnabledRef.current = false
+    map.flyTo({ center: [flyToTarget.lon, flyToTarget.lat], zoom: flyToTarget.zoom ?? 8, duration: 2000 })
+  }, [flyToTarget])
+
   // Add the two-layer setup on first use, or cross-fade to the newly
   // selected year's tile once it's already in place -- see
   // ensureEra5AnnualLayers/crossfadeEra5Annual above for why it's two
@@ -1126,5 +1149,74 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sensorsGlof2Visible, sensorsGlof2DamagedVisible, sensorsBriFfVisible, sensorsFocus2026Visible, sensorsGmrcWapdaVisible])
 
-  return <div id="map" ref={containerRef} />
+  // Temperature/elevation-on-hover toggle -- debounced so moving the
+  // cursor doesn't fire a live Earth Engine round trip on every mousemove
+  // event (see /api/hover-info; each one is ~200ms-2s the first time a
+  // given ~10km temperature cell or ~30m elevation pixel is queried, near-
+  // instant on repeat since the backend caches by snapped coordinates).
+  // Re-runs only when the toggle itself flips, not when the slider's year
+  // changes -- hoverInfoYearRef carries the latest year into the listener
+  // without needing to tear it down and re-attach every slider step.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (!hoverInfoVisible) {
+      setHoverInfo(null)
+      if (hoverInfoTimeoutRef.current) clearTimeout(hoverInfoTimeoutRef.current)
+      return
+    }
+
+    const HOVER_DEBOUNCE_MS = 220
+
+    function onMouseMove(e) {
+      const { lng, lat } = e.lngLat
+      setHoverInfo((prev) => ({ lon: lng, lat, tempC: prev?.tempC ?? null, elevationM: prev?.elevationM ?? null, loading: true }))
+      if (hoverInfoTimeoutRef.current) clearTimeout(hoverInfoTimeoutRef.current)
+      hoverInfoTimeoutRef.current = setTimeout(() => {
+        const year = hoverInfoYearRef.current
+        if (year == null) return
+        fetch(`/api/hover-info?lon=${lng}&lat=${lat}&year=${year}`)
+          .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`request failed (${r.status})`))))
+          .then((data) => setHoverInfo({ lon: lng, lat, tempC: data.tempC, elevationM: data.elevationM, loading: false }))
+          .catch(() => setHoverInfo((prev) => (prev ? { ...prev, loading: false } : null)))
+      }, HOVER_DEBOUNCE_MS)
+    }
+
+    function onMouseLeave() {
+      if (hoverInfoTimeoutRef.current) clearTimeout(hoverInfoTimeoutRef.current)
+      setHoverInfo(null)
+    }
+
+    map.on('mousemove', onMouseMove)
+    map.on('mouseout', onMouseLeave)
+    return () => {
+      map.off('mousemove', onMouseMove)
+      map.off('mouseout', onMouseLeave)
+      if (hoverInfoTimeoutRef.current) clearTimeout(hoverInfoTimeoutRef.current)
+    }
+  }, [hoverInfoVisible])
+
+  return (
+    <>
+      <div id="map" ref={containerRef} />
+      {hoverInfoVisible && hoverInfo && (
+        <div id="hover-info-readout">
+          <div className="hover-info-coord">{hoverInfo.lat.toFixed(4)}°, {hoverInfo.lon.toFixed(4)}°</div>
+          <div className="hover-info-row">
+            <span className="k">Temp</span>
+            <span className="v">
+              {hoverInfo.tempC != null ? `${hoverInfo.tempC.toFixed(1)}°C` : hoverInfo.loading ? '…' : '—'}
+            </span>
+          </div>
+          <div className="hover-info-row">
+            <span className="k">Elev</span>
+            <span className="v">
+              {hoverInfo.elevationM != null ? `${Math.round(hoverInfo.elevationM)} m` : hoverInfo.loading ? '…' : '—'}
+            </span>
+          </div>
+        </div>
+      )}
+    </>
+  )
 }

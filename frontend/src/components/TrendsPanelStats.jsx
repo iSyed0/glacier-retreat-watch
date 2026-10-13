@@ -148,19 +148,19 @@ const METRICS = {
     methodNote: (scopeNote) =>
       `Elevation change: area-weighted mean across ${scopeNote} with a figure for that period (Hugonnet et al. 2021), the actual resolution the satellite record supports -- not truly annual.`,
   },
-  mass: {
-    rateKey: 'massBalanceRateGtYr',
+  specificMass: {
+    rateKey: 'specificMassBalanceMWeYr',
     icon: 'mass',
-    chartTitle: 'Mass balance rate (Gt/yr)',
-    cardLabel: 'Mass change',
-    cardUnit: ' Gt',
+    chartTitle: 'Specific mass balance (m w.e./yr)',
+    cardLabel: 'Mass balance',
+    cardUnit: ' m w.e.',
     cardDecimals: 2,
-    tableHeader: 'Mass Δ (Gt/yr)',
-    tableDecimals: 2,
+    tableHeader: 'Mass bal. (m w.e./yr)',
+    tableDecimals: 3,
     tooltipLabel: 'Mass balance',
-    tooltipUnit: ' Gt/yr',
+    tooltipUnit: ' m w.e./yr',
     methodNote: (scopeNote) =>
-      `Mass balance: total ice-volume change across ${scopeNote} (Hugonnet et al. 2021), converted to mass with a standard ice density of 850 kg/m³ (Huss, 2013) -- the same satellite-record resolution/caveats as elevation change apply.`,
+      `Specific mass balance: the area-weighted mean elevation-change rate across ${scopeNote} (Hugonnet et al. 2021), converted to water-equivalent mass balance with a standard ice density of 850 kg/m³ (Huss, 2013) -- the same formula and units as the "Mass balance (est.)" figure on each glacier's own Mass Balance tab, here area-weighted across the whole region/country instead of for one glacier.`,
   },
 }
 
