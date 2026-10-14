@@ -291,7 +291,7 @@ Chart keys (`CHART_DEFS`, opened via `openChart(key)`): `trendsHkh`, `trendsPk`,
 ## Recent chatbot activity
 
 <!-- AUTO:activity:start -->
-_No chatbot commits yet._
+- `27b075a` 2026-10-13 Integrate local LLM chatbot (google/gemma-4-e2b via LM Studio)
 <!-- AUTO:activity:end -->
 
 ## Notes / scratch
