@@ -101,7 +101,17 @@ Glacier tables in replies are clickable: each row opens that glacier on the map.
 | `LMSTUDIO_MODEL` | `google/gemma-4-e2b` | any LM Studio model key works; bigger models follow the format better |
 | `LMSTUDIO_CONTEXT` | `4096` | minimum context; the backend loads a new instance with this if none qualifies |
 
-**LM Studio must have its server running** (Developer tab → Start server, or `lms server start`). The chat panel shows a banner with a **Load now** button if the model isn't loaded with enough context.
+**LM Studio must have its server running.** `start.bat` starts it, and opens the LM Studio app first if needed. You can also start it from the Developer tab, or with `lms server start`. The chat panel shows a banner with a **Load now** button if the model isn't loaded with enough context.
+
+**Network access (other PCs):**
+- `start.bat` binds the portal to `0.0.0.0:8000` and prints the LAN address. Other PCs open `http://<this-pc>:8000` and use the assistant through the portal backend.
+- LM Studio stays bound to `127.0.0.1`, so the model itself is never exposed to the network.
+- `start.bat` stops any leftover portal server on port 8000 first. An old localhost-only instance would otherwise keep the port.
+- Windows Firewall has to allow it. `scripts/allow_network.ps1` handles two things:
+  1. It adds the inbound rule `HKH-Glacier-Watch` for TCP 8000 (Domain/Private).
+  2. It removes any inbound **Block** rule for the Python that runs the server. Windows creates such a rule when its "blocked some features" prompt is cancelled, and block rules beat allow rules.
+- `start.bat` runs a non-admin `-Check` first and asks for admin (UAC) only if something needs fixing. To fix by hand, run this in an admin PowerShell: `powershell -ExecutionPolicy Bypass -File scripts\allow_network.ps1`. It logs to `scripts\allow_network.log`.
+- Verified working from another office PC on 2026-10-14.
 
 ### Backend routes added
 
@@ -291,6 +301,7 @@ Chart keys (`CHART_DEFS`, opened via `openChart(key)`): `trendsHkh`, `trendsPk`,
 ## Recent chatbot activity
 
 <!-- AUTO:activity:start -->
+- `5079f9e` 2026-10-14 Assistant logo, draggable assistant, charts panel default position
 - `27b075a` 2026-10-13 Integrate local LLM chatbot (google/gemma-4-e2b via LM Studio)
 <!-- AUTO:activity:end -->
 
